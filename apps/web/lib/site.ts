@@ -2,21 +2,22 @@ export const SITE_NAME = "AIVaultsAI";
 export const SITE_URL = "https://www.aivaultsai.one";
 export const SITE_DOMAIN = "aivaultsai.one";
 
-export const SITE_TITLE = "AIVaultsAI — AI-automatisering voor het MKB";
+export const SITE_TITLE = "AIVaultsAI — Websites, AI-assistenten en automatisering voor bedrijven";
 export const SITE_DESCRIPTION =
-  "AIVaultsAI automatiseert repetitief werk voor bedrijven: klantaanvragen, e-mail, documenten, leads en opvolging.";
+  "AIVaultsAI bouwt websites, AI-assistenten en automatiseringen die bedrijven helpen bezoekers op te vangen, leads te kwalificeren en werk slimmer te organiseren.";
 
 export const NAV = [
-  { href: "#pricing", label: "Diensten" },
-  { href: "#platform", label: "Aanpak" },
-  { href: "#agents", label: "AI agents" },
-  { href: "#architecture", label: "Architectuur" },
-  { href: "#contact", label: "Contact" },
+  { href: "#solutions", label: "Oplossingen" },
+  { href: "#ai", label: "AI-assistent" },
+  { href: "#automation", label: "Automatisering" },
+  { href: "#pricing", label: "Aanbod" },
+  { href: "#faq", label: "FAQ" },
 ] as const;
 
 export const FOOTER_LINKS = [
-  { href: "#pricing", label: "Diensten" },
-  { href: "#platform", label: "Aanpak" },
-  { href: "#architecture", label: "Architectuur" },
+  { href: "#solutions", label: "Oplossingen" },
+  { href: "#pricing", label: "Aanbod" },
+  { href: "#how-it-works", label: "Zo werkt het" },
+  { href: "#faq", label: "FAQ" },
   { href: "#contact", label: "Contact" },
 ] as const;
