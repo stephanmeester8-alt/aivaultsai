@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Message = {
   role: "user" | "assistant";
@@ -25,6 +26,11 @@ export function LiveAssistant() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setMountNode(document.querySelector<HTMLElement>("#solutions"));
+  }, []);
 
   async function sendMessage(value: string) {
     const text = value.trim();
@@ -62,7 +68,7 @@ export function LiveAssistant() {
     void sendMessage(input);
   }
 
-  return (
+  const assistantSection = (
     <section id="live-ai" className="scroll-mt-24 border-b border-line py-16 sm:py-24" aria-labelledby="live-ai-heading">
       <div className="mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
@@ -179,4 +185,7 @@ export function LiveAssistant() {
       </div>
     </section>
   );
+
+  if (!mountNode) return null;
+  return createPortal(assistantSection, mountNode.parentElement!, { key: "live-ai-after-hero" });
 }
