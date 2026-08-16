@@ -2,19 +2,21 @@ export const SITE_NAME = "AIVaultsAI";
 export const SITE_URL = "https://www.aivaultsai.one";
 export const SITE_DOMAIN = "aivaultsai.one";
 
-export const SITE_TITLE = "AIVaultsAI — AI Agents That Work Together";
+export const SITE_TITLE = "AIVaultsAI — AI-automatisering voor het MKB";
 export const SITE_DESCRIPTION =
-  "AIVaultsAI is building an AI agent operating system for real-world work, combining specialized agents, controlled execution, evidence and human oversight.";
+  "AIVaultsAI automatiseert repetitief werk voor bedrijven: klantaanvragen, e-mail, documenten, leads en opvolging.";
 
 export const NAV = [
-  { href: "#platform", label: "Platform" },
-  { href: "#agents", label: "Agents" },
-  { href: "#architecture", label: "Architecture" },
-  { href: "#roadmap", label: "Roadmap" },
+  { href: "#pricing", label: "Diensten" },
+  { href: "#platform", label: "Aanpak" },
+  { href: "#agents", label: "AI agents" },
+  { href: "#architecture", label: "Architectuur" },
+  { href: "#contact", label: "Contact" },
 ] as const;
 
 export const FOOTER_LINKS = [
-  { href: "#platform", label: "Platform" },
-  { href: "#architecture", label: "Architecture" },
-  { href: "#roadmap", label: "Roadmap" },
+  { href: "#pricing", label: "Diensten" },
+  { href: "#platform", label: "Aanpak" },
+  { href: "#architecture", label: "Architectuur" },
+  { href: "#contact", label: "Contact" },
 ] as const;

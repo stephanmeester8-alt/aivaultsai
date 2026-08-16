@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     url: SITE_URL,
     siteName: SITE_NAME,
-    locale: "en_US",
+    locale: "nl_NL",
     type: "website",
   },
   twitter: {
@@ -48,10 +48,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
+    <html lang="nl" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body id="top" className="font-sans text-ink antialiased">
         <a className="skip-link" href="#main">
-          Skip to content
+          Ga naar inhoud
         </a>
         <SiteHeader />
         {children}

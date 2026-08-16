@@ -18,10 +18,10 @@ export function SiteHeader() {
             <span className="text-sm font-medium tracking-tight">{SITE_NAME}</span>
           </a>
           <a
-            href="#early-access"
+            href="#pricing"
             className="inline-flex items-center rounded-sm bg-ink px-3 py-1.5 text-xs font-medium text-canvas no-underline sm:hidden"
           >
-            Early Access
+            Bekijk aanbod
           </a>
         </div>
         <nav aria-label="Primary" className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-1 sm:pb-0">
@@ -35,10 +35,10 @@ export function SiteHeader() {
             </a>
           ))}
           <a
-            href="#early-access"
+            href="#contact"
             className="ml-auto hidden items-center rounded-sm bg-ink px-3 py-1.5 text-xs font-medium text-canvas no-underline hover:bg-gold sm:inline-flex"
           >
-            Early Access
+            Bespreek jouw proces
           </a>
         </nav>
       </Container>
