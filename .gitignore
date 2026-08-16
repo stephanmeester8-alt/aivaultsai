@@ -1,0 +1,39 @@
+﻿# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Next.js
+.next/
+out/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+
+# Local development
+*.local
+
+# Test / coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp

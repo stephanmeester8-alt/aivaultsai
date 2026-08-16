@@ -1,0 +1,17 @@
+---
+description: Core workspace, scope, and change rules for AIVaultsAI
+alwaysApply: true
+---
+
+# Core
+
+- Work only in `C:\aivaultsai-new` (`https://github.com/stephanmeester8-alt/aivaultsai.git`).
+- Do not inspect unrelated repositories (`C:\aivaultsai`, `C:\AIVaults`, VoyageAgent, or any other repo).
+- This repository is greenfield. Do not claim unimplemented capabilities exist.
+- Distinguish DESIGNED, PLANNED, IMPLEMENTED, and UNKNOWN.
+- Prefer small, task-scoped changes.
+- Do not introduce dependencies without justification in the current task.
+- Do not build the website, SaaS, database, Browser Use integration, or runtimes unless the current task explicitly authorizes them.
+- Do not connect external APIs or create API keys unless explicitly authorized.
+- Never expose secrets, tokens, or credentials.
+- Never invent test results. Never claim execution without execution evidence.

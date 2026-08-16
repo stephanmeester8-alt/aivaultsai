@@ -1,0 +1,15 @@
+---
+description: Agent vs tool vs orchestrator vs permission boundaries
+alwaysApply: true
+---
+
+# Agents
+
+- Agents reason and delegate. Tools execute. The orchestrator coordinates. The policy engine authorizes.
+- AGENT ≠ TOOL. AGENT ≠ BROWSER. AGENT ≠ PERMISSION. AGENT ≠ ORCHESTRATOR.
+- Browser Use is a tool/capability, not an agent. Hermes is an external runtime, not a specialist agent.
+- Specialist agents: `cto-architect`, `research-intelligence`, `product-ux`, `principal-engineer`, `growth-analytics`.
+- Every agent must conform to `agents/contracts/agent-definition.md`.
+- Handoffs must use `agents/contracts/handoff.md`. A handoff is not a chat message.
+- Do not implement agent or orchestration runtimes unless the current task authorizes it.
+- Preserve architectural boundaries when adding files or behavior.

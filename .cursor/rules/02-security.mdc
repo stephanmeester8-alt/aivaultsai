@@ -1,0 +1,16 @@
+---
+description: Policy, permissions, secrets, and human approval
+alwaysApply: true
+---
+
+# Security
+
+- Tool invocation path: AGENT → POLICY CHECK → PERMISSION CHECK → TOOL EXECUTION → RESULT → EVIDENCE / AUDIT.
+- Do not bypass permission or policy checks.
+- Do not use browser capabilities without authorization.
+- Browser Use must not bypass the policy engine. Default browser permissions are not unrestricted.
+- RiskLevel: LOW, MEDIUM, HIGH, CRITICAL.
+- HIGH and CRITICAL actions require human `Approval` (`PENDING` until a human resolves them).
+- High-risk classes: publish, message, purchase, delete, sensitive upload, account changes, form submit, authenticated external actions.
+- Never expose secrets. Do not commit `.env`, keys, tokens, or credentials.
+- No autonomous high-risk execution.

@@ -1,0 +1,15 @@
+---
+description: Evidence, provenance, and fact vs inference
+alwaysApply: true
+---
+
+# Evidence
+
+- Do not invent evidence, sources, metrics, or test results.
+- Do not claim successful execution without execution evidence.
+- Separate FACT from INFERENCE, HYPOTHESIS, ASSUMPTION, COMPANY_CLAIM, and UNKNOWN.
+- Confidence: HIGH, MEDIUM, LOW, UNKNOWN. Missing source cannot be HIGH.
+- Record counter-evidence when found. Do not omit conflicts.
+- Provenance must say who/what collected the data. If a tool did not run, do not claim it ran.
+- If `evidence_required` is true, a task cannot be DONE without Evidence records.
+- UNKNOWN is valid. Fabrication is not.
