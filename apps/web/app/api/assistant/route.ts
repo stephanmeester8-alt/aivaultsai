@@ -48,7 +48,6 @@ function extractText(data: unknown): string {
   const response = data as { output_text?: unknown; output?: unknown };
 
   if (typeof response.output_text === "string") return response.output_text.trim();
-
   if (!Array.isArray(response.output)) return "";
 
   return response.output
@@ -70,10 +69,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "De AI-assistent is nog niet geconfigureerd." },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: "De AI-assistent is nog niet geconfigureerd." }, { status: 503 });
   }
 
   try {
@@ -91,7 +87,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_ASSISTANT_MODEL || "gpt-5-mini",
+        model: process.env.OPENAI_ASSISTANT_MODEL || "gpt-5.6-luna",
         instructions: SYSTEM_PROMPT,
         input: messages,
         max_output_tokens: 500,
@@ -100,28 +96,19 @@ export async function POST(request: Request) {
 
     if (!upstream.ok) {
       console.error("OpenAI assistant request failed", upstream.status, await upstream.text());
-      return NextResponse.json(
-        { error: "De AI-assistent is tijdelijk niet beschikbaar. Probeer het zo opnieuw." },
-        { status: 502 },
-      );
+      return NextResponse.json({ error: "De AI-assistent is tijdelijk niet beschikbaar. Probeer het zo opnieuw." }, { status: 502 });
     }
 
     const data = (await upstream.json()) as unknown;
     const message = extractText(data);
 
     if (!message) {
-      return NextResponse.json(
-        { error: "De assistent gaf geen antwoord terug. Probeer het opnieuw." },
-        { status: 502 },
-      );
+      return NextResponse.json({ error: "De assistent gaf geen antwoord terug. Probeer het opnieuw." }, { status: 502 });
     }
 
     return NextResponse.json({ message });
   } catch (error) {
     console.error("Assistant route error", error);
-    return NextResponse.json(
-      { error: "Er ging iets mis met de AI-assistent. Probeer het opnieuw." },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Er ging iets mis met de AI-assistent. Probeer het opnieuw." }, { status: 500 });
   }
 }
