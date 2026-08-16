@@ -1,24 +1,12 @@
 import { Container } from "./container";
-import { Pipeline } from "./pipeline";
 import { SectionHeading } from "./section-heading";
-import { StatusBadge } from "./status-badge";
 
-const STAGES = [
-  { label: "User", detail: "A person initiates work. Not an autonomous loop.", status: "built" as const },
-  { label: "Task", detail: "Lifecycle: backlog through done or failed.", status: "built" as const },
-  { label: "Orchestrator", detail: "Coordinates engines. Stops before live execution.", status: "built" as const },
-  { label: "Agent", detail: "Five specialist definitions and an in-memory registry.", status: "built" as const },
-  { label: "Policy", detail: "Pure authorization. ALLOW is not execution.", status: "built" as const },
-  { label: "Approval", detail: "Human records for high-risk and critical actions.", status: "built" as const },
-  {
-    label: "Execution gate",
-    detail: "The only future execution boundary. Adapters are not implemented.",
-    status: "in-development" as const,
-  },
-  { label: "Tools", detail: "Browser, filesystem, terminal, HTTP, and MCP remain disabled.", status: "planned" as const },
-  { label: "Evidence", detail: "Append-only records with typed claims and provenance.", status: "built" as const },
-  { label: "Handoff", detail: "Structured transfer between agents. Not a chat message.", status: "built" as const },
-];
+const BENEFITS = [
+  ["Concreet", "We beginnen met één duidelijk bedrijfsprobleem."],
+  ["Gecontroleerd", "Automatisering wordt eerst getest en ingericht voordat ze in gebruik gaat."],
+  ["Uitbreidbaar", "Een kleine automatisering kan later doorgroeien naar een groter AI-proces."],
+  ["Menselijk waar nodig", "Belangrijke beslissingen blijven onder controle van de ondernemer."],
+] as const;
 
 export function Architecture() {
   return (
@@ -31,19 +19,32 @@ export function Architecture() {
         <SectionHeading
           id="architecture-heading"
           index="06"
-          eyebrow="Architecture"
-          title="One path. Explicit status."
+          eyebrow="Onze aanpak"
+          title="AI die past bij hoe jouw bedrijf werkt."
         >
-          The public website is presentation-only. It does not import the agent-core package and does not
-          run agents. Labels below describe the designed system, not a live production runtime.
+          Geen black box en geen groot IT-project als eerste stap. We brengen het proces in kaart, bepalen waar AI
+          waarde toevoegt en bouwen vervolgens alleen wat nodig is.
         </SectionHeading>
-        <div className="mt-10 flex flex-wrap gap-2" aria-label="Status legend">
-          <StatusBadge status="built" />
-          <StatusBadge status="in-development" />
-          <StatusBadge status="planned" />
+
+        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          {BENEFITS.map(([title, detail]) => (
+            <article key={title} className="border border-line bg-panel p-6">
+              <h3 className="text-base font-medium text-ink">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-mute">{detail}</p>
+            </article>
+          ))}
         </div>
-        <div className="mt-8 border border-line bg-panel p-6 sm:p-8">
-          <Pipeline labelledBy="architecture-heading" stages={STAGES} />
+
+        <div className="mt-8 border border-gold/40 bg-panel p-6 sm:p-8">
+          <p className="font-mono text-[10px] tracking-[0.18em] text-gold uppercase">Van idee naar resultaat</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-4">
+            {["Probleem", "Ontwerp", "Bouwen", "Verbeteren"].map((stage, index) => (
+              <div key={stage} className="border border-line bg-canvas p-4">
+                <p className="font-mono text-[10px] text-faint">0{index + 1}</p>
+                <p className="mt-2 text-sm font-medium text-ink">{stage}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </Container>
     </section>
