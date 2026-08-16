@@ -29,7 +29,15 @@ export function LiveAssistant() {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    setMountNode(document.querySelector<HTMLElement>("#solutions"));
+    const solutions = document.querySelector<HTMLElement>("#solutions");
+    const host = document.createElement("div");
+
+    if (!solutions?.parentElement) return;
+
+    solutions.parentElement.insertBefore(host, solutions);
+    setMountNode(host);
+
+    return () => host.remove();
   }, []);
 
   async function sendMessage(value: string) {
@@ -187,5 +195,5 @@ export function LiveAssistant() {
   );
 
   if (!mountNode) return null;
-  return createPortal(assistantSection, mountNode.parentElement!, { key: "live-ai-after-hero" });
+  return createPortal(assistantSection, mountNode);
 }
