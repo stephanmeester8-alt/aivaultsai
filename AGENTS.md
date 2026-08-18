@@ -1,31 +1,39 @@
-# AIVaultsAI
+# AIVaultsAI Engineering Guide
 
 ## Project purpose
 
-AIVaultsAI is a **designed** AI-powered operating system for discovering, designing, building, deploying, and optimizing AI workflows and agents for businesses.
+AIVaultsAI is an AI-powered platform for discovering, designing, building, deploying, and optimizing AI workflows and agents for businesses.
 
-This repository currently contains the **architectural foundation only**: contracts, agent definitions, security model, and Cursor rules.
+The repository now contains the first public website and a live commercial AI assistant, plus the architectural foundation for the future agent platform.
 
-**Status of this repository:** GREENFIELD.
+**Current status:** Customer Zero / early product validation.
 
-No website, SaaS application, database, agent runtime, tool runtime, or Browser Use integration is implemented.
+The project must distinguish between:
 
-## Greenfield status
+- implemented and deployed functionality;
+- designed architecture;
+- planned functionality.
 
-| Item | Status |
-|---|---|
-| Architecture contracts | DESIGNED |
-| Specialist agent definitions | DESIGNED |
-| Orchestration lifecycle | DESIGNED |
-| Tool and permission model | DESIGNED |
-| Agent runtime | NOT IMPLEMENTED |
-| Tool execution | NOT IMPLEMENTED |
-| Browser Use | NOT IMPLEMENTED |
-| Database | NOT IMPLEMENTED |
-| Website / SaaS | NOT IMPLEMENTED |
-| External API connections | NOT IMPLEMENTED |
+Claims must match evidence.
 
-Claims of capability must match this table. Do not describe planned components as if they exist.
+## Customer Zero
+
+AIVaultsAI is its own first customer.
+
+The public website at `aivaultsai.one` is the first production-like environment used to validate acquisition, AI conversations, lead capture, qualification, follow-up, and conversion workflows.
+
+See:
+
+- `docs/customer-zero/README.md`
+- `docs/customer-zero/measurement.md`
+
+The product-learning loop is:
+
+```text
+OBSERVE → MEASURE → ANALYZE → CHANGE → RE-TEST → DOCUMENT
+```
+
+No business result may be claimed without actual measurement evidence.
 
 ## Repository boundaries
 
@@ -41,16 +49,7 @@ Git remote:
 https://github.com/stephanmeester8-alt/aivaultsai.git
 ```
 
-Agents must not access repositories outside the current workspace.
-
-Do not inspect, copy from, or depend on:
-
-- `C:\aivaultsai`
-- `C:\AIVaults`
-- VoyageAgent
-- any other local or remote repository unless a later task explicitly names it **and** it is inside this workspace
-
-Do not create `apps/`, `packages/`, `database/`, infrastructure, production frontend, or backend implementation unless a later task explicitly authorizes them.
+Do not inspect, copy from, or depend on unrelated repositories unless explicitly authorized for a task.
 
 ## Architecture principles
 
@@ -73,13 +72,13 @@ Keep these boundaries explicit:
 - AGENT ≠ PERMISSION
 - AGENT ≠ ORCHESTRATOR
 
-Hermes is an external/local agent runtime that may eventually connect to this orchestration layer. It is not defined as a specialist agent in this repository.
+Hermes is an external/local agent runtime that may eventually connect to this orchestration layer. It is not a specialist agent in this repository.
 
-Browser Use is a browser-execution **capability/tool**. It is not an agent.
+Browser Use is a browser-execution capability/tool. It is not an agent.
 
 ## Agent roles
 
-Five specialist agents are **defined**, not implemented:
+Five specialist agents are defined in the architecture:
 
 | ID | Name | Primary question |
 |---|---|---|
@@ -89,11 +88,9 @@ Five specialist agents are **defined**, not implemented:
 | `principal-engineer` | Principal AI Full-Stack Engineer | How do we implement this correctly? |
 | `growth-analytics` | Growth / Analytics Agent | What is working and how can we improve it? |
 
-Every agent must eventually conform to `AgentDefinition`. See `agents/contracts/agent-definition.md`.
+These definitions describe roles; they must not be represented as autonomous production agents unless the runtime is actually implemented and verified.
 
 ## Task lifecycle
-
-Designed lifecycle (not implemented):
 
 ```text
 TASK CREATED
@@ -110,32 +107,18 @@ TASK CREATED
 → COMPLETE
 ```
 
-Task statuses: `BACKLOG`, `READY`, `IN_PROGRESS`, `BLOCKED`, `REVIEW`, `DONE`, `FAILED`.
-
-See `docs/architecture/orchestration.md` and `agents/contracts/task.md`.
-
-## Handoff rules
-
-A handoff is a structured engineering artifact, not a chat message.
-
-Required content: objective, completed work, findings, decisions, evidence, risks, open questions, and recommended next action.
-
-See `agents/contracts/handoff.md`.
-
 ## Evidence rules
 
-Research must be evidence-driven.
+Research and product claims must be evidence-driven.
 
-- Agents must not invent evidence.
-- Agents must not claim successful execution without execution evidence.
+- Never invent evidence.
+- Never claim successful execution without execution evidence.
 - Separate facts from inference.
-- Record source, provenance, confidence, and epistemic type.
+- Record source, provenance, confidence, and epistemic type where applicable.
 
 Allowed confidence: `HIGH`, `MEDIUM`, `LOW`, `UNKNOWN`.
 
 Allowed epistemic types: `FACT`, `COMPANY_CLAIM`, `INDEPENDENTLY_VERIFIED`, `INFERENCE`, `HYPOTHESIS`, `ASSUMPTION`, `UNKNOWN`.
-
-See `agents/contracts/evidence.md`.
 
 ## Security rules
 
@@ -150,17 +133,20 @@ AGENT → POLICY CHECK → PERMISSION CHECK → TOOL EXECUTION → RESULT → EV
 - Agents must not expose secrets.
 - High-risk and critical actions require human approval.
 
-See `docs/security/agent-permissions.md`.
+## Website / assistant truthfulness
+
+The public assistant may explain what AIVaultsAI can build, but it must not claim that an integration or automation exists unless that integration is actually connected and verified.
+
+Current assistant behavior is implemented in `apps/web/app/api/assistant/route.ts`.
+
+The website entry point is `apps/web/app/page.tsx`.
 
 ## Forbidden behavior
 
 - Work outside `C:\aivaultsai-new`.
-- Inspect unrelated repositories.
-- Invent test results, execution results, or evidence.
-- Claim a capability is implemented when it is only designed or planned.
-- Bypass the policy or permission model.
-- Use browser capabilities without authorization.
+- Inspect unrelated repositories without explicit authorization.
+- Invent test results, execution results, customer results, or evidence.
+- Claim planned functionality is implemented.
+- Bypass policy or permission controls.
 - Expose secrets, API keys, tokens, or credentials.
-- Install dependencies without justification in the current task.
-- Build the website, SaaS, database, Browser Use integration, or runtime before a later task authorizes it.
-- Connect external APIs or create API keys unless a later task explicitly authorizes it.
+- Install dependencies without justification.
