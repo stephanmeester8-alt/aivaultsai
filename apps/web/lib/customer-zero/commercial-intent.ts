@@ -20,7 +20,8 @@ type PatternGroup = {
  * ------------------------------------------------------------
  * HIGH INTENT
  *
- * Alleen expliciete conversiestappen.
+ * Alleen expliciete conversiestappen:
+ * afspraak, kennismaking, demo, contact.
  * ------------------------------------------------------------
  */
 
@@ -62,7 +63,6 @@ const HIGH_INTENT_GROUPS: PatternGroup[] = [
  * We kijken naar het zakelijke doel, niet naar de branche.
  *
  * Voorbeelden:
- *
  * webshop       -> meer kleding verkopen
  * fietsenwinkel -> meer fietsen verkopen
  * restaurant    -> meer reserveringen
@@ -103,8 +103,7 @@ const COMMERCIAL_GOAL_GROUPS: PatternGroup[] = [
       /*
        * Product-specifieke verkoop.
        *
-       * Hiermee werkt bijvoorbeeld:
-       *
+       * Bijvoorbeeld:
        * "meer kleding verkopen"
        * "meer fietsen verkopen"
        * "meer auto's verkopen"
@@ -177,11 +176,14 @@ const PROJECT_INTENT_GROUPS: PatternGroup[] = [
  * ------------------------------------------------------------
  * INFORMATIONAL
  *
- * Deze patronen maken een bericht NIET commercieel.
+ * Deze patronen maken een bericht expliciet informatief.
+ *
+ * Ze moeten vóór de BUSINESS_INTEREST fallback worden
+ * gecontroleerd.
  * ------------------------------------------------------------
  */
 
-const INFORMATIONAL_PATTERNS = [
+const INFORMATIONAL_PATTERNS: RegExp[] = [
   /^wat kunnen jullie met ai\b/i,
   /^wat kunnen jullie\b/i,
   /^wat doet aivaultsai\b/i,
@@ -208,7 +210,7 @@ const INFORMATIONAL_PATTERNS = [
  * ------------------------------------------------------------
  */
 
-const BUSINESS_CONTEXT_PATTERNS = [
+const BUSINESS_CONTEXT_PATTERNS: RegExp[] = [
   /\bik heb een bedrijf\b/i,
   /\bwij hebben een bedrijf\b/i,
   /\bwe hebben een bedrijf\b/i,
@@ -221,6 +223,12 @@ const BUSINESS_CONTEXT_PATTERNS = [
   /\bonze winkel\b/i,
   /\bmijn zaak\b/i,
   /\bonze zaak\b/i,
+  /\bik heb een webshop\b/i,
+  /\bwij hebben een webshop\b/i,
+  /\bwe hebben een webshop\b/i,
+  /\bik heb een winkel\b/i,
+  /\bwij hebben een winkel\b/i,
+  /\bwe hebben een winkel\b/i,
 ];
 
 /*
@@ -333,9 +341,10 @@ export function detectCommercialIntent(
    * ----------------------------------------------------------
    * 4. AUTOMATION + COMMERCIAL GOAL
    *
-   * Een combinatie zoals:
+   * Bijvoorbeeld:
    *
-   * "aanvragen automatisch opvolgen en meer klanten binnenhalen"
+   * "aanvragen automatisch opvolgen en meer klanten
+   * binnenhalen"
    *
    * is een zeer sterke commerciële intentie.
    * ----------------------------------------------------------
@@ -400,13 +409,18 @@ export function detectCommercialIntent(
 
   /*
    * ----------------------------------------------------------
-   * 7. ALLEEN BEDRIJFSCONTEXT
+   * 7. PUUR INFORMATIEF
    *
-   * Dit is bewust GEEN lead.
+   * Dit moet vóór BUSINESS_INTEREST komen.
+   *
+   * Anders worden simpele vragen zoals:
+   * "Wat kunnen jullie met AI?"
+   *
+   * onterecht BUSINESS_INTEREST.
    * ----------------------------------------------------------
    */
 
-  if (hasBusinessContext(text)) {
+  if (hasInformationalIntent(text)) {
     return {
       level: "INFORMATIONAL",
       detected: false,
@@ -417,11 +431,13 @@ export function detectCommercialIntent(
 
   /*
    * ----------------------------------------------------------
-   * 8. PUUR INFORMATIEF
+   * 8. ALLEEN BEDRIJFSCONTEXT
+   *
+   * Dit is bewust GEEN lead.
    * ----------------------------------------------------------
    */
 
-  if (hasInformationalIntent(text)) {
+  if (hasBusinessContext(text)) {
     return {
       level: "INFORMATIONAL",
       detected: false,
