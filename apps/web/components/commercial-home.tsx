@@ -260,11 +260,7 @@ export function CommercialHome() {
         </Container>
       </section>
 
-      {/* LIVE AI ASSISTANT
-          Bewust direct onder de eerste landing/hero geplaatst.
-          Geen portal, geen DOM-manipulatie.
-          Werkt daardoor ook netjes responsive op mobiel.
-      */}
+      {/* LIVE AI ASSISTANT */}
       <LiveAssistant />
 
       {/* SOLUTIONS */}
@@ -728,14 +724,18 @@ export function CommercialHome() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a
-                href="mailto:aivaultsai@gmail.com?subject=Kennismaking%20AIVaultsAI"
+                href="https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Kennismaking%20AIVaultsAI"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center justify-center rounded-sm bg-ink px-6 py-3.5 text-sm font-medium text-canvas no-underline hover:bg-gold"
               >
                 Plan een kennismaking →
               </a>
 
               <a
-                href="mailto:aivaultsai@gmail.com?subject=Vraag%20over%20AIVaultsAI"
+                href="https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Vraag%20over%20AIVaultsAI"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center justify-center rounded-sm border border-line px-6 py-3.5 text-sm font-medium text-ink no-underline hover:border-gold/50"
               >
                 Stel een vraag
