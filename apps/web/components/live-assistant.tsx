@@ -76,16 +76,18 @@ export function LiveAssistant() {
     setLoading(true);
 
     try {
+      const requestBody = {
+        sessionId,
+        message: text,
+        ...(conversationId ? { conversationId } : {}),
+      };
+
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          conversationId,
-          sessionId,
-          message: text,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = (await response.json()) as AssistantResponse;
