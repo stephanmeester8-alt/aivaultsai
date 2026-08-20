@@ -38,6 +38,10 @@ export function isValidUuid(value: unknown): value is string {
  * Validate and type the assistant request body.
  * The client may only supply the new user message; conversation history is
  * never accepted from the client (see normalizeHistory/buildModelInput).
+ *
+ * conversationId is optional. Both an omitted value and an explicit null
+ * mean that the backend should create a new conversation. A supplied value
+ * must still be a valid UUID.
  */
 export function parseAssistantRequest(data: unknown): ParseResult {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
@@ -60,7 +64,7 @@ export function parseAssistantRequest(data: unknown): ParseResult {
   if (typeof sessionId !== "string" || !isValidUuid(sessionId)) {
     return { ok: false, status: 400, error: "Ongeldige sessie." };
   }
-  if (conversationId !== undefined) {
+  if (conversationId !== undefined && conversationId !== null) {
     if (typeof conversationId !== "string" || !isValidUuid(conversationId)) {
       return { ok: false, status: 400, error: "Ongeldig gesprek." };
     }
@@ -68,7 +72,12 @@ export function parseAssistantRequest(data: unknown): ParseResult {
 
   return {
     ok: true,
-    value: { conversationId, sessionId, message: message.trim() },
+    value: {
+      conversationId:
+        conversationId === null ? undefined : conversationId,
+      sessionId,
+      message: message.trim(),
+    },
   };
 }
 
