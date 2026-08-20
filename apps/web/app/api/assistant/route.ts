@@ -12,6 +12,10 @@ import {
   parseAssistantRequest,
 } from "@/lib/assistant/request";
 import {
+  createDefaultFunnelDeps,
+  maybeRunCustomerZeroOrchestration,
+} from "@/lib/customer-zero/assistant-funnel";
+import {
   readBearerToken,
   verifyAssistantApiKey,
 } from "@/lib/assistant/auth";
@@ -489,6 +493,24 @@ export async function POST(request: Request) {
         last_activity_at = NOW()
       WHERE conversation_id = ${resolvedConversationId}::uuid
     `;
+
+    /*
+     * ----------------------------------------------------------
+     * 8b. Customer-zero funnel wiring (non-fatal).
+     *
+     * Connects the existing conversation to the existing
+     * customer-zero orchestrator: commercial intent detection,
+     * lead creation and qualification events. A conversation gets
+     * at most one lead; failures never break the assistant reply.
+     * ----------------------------------------------------------
+     */
+    await maybeRunCustomerZeroOrchestration(
+      {
+        conversationId: resolvedConversationId,
+        messages: [...history, { role: "user", content: message }],
+      },
+      createDefaultFunnelDeps(),
+    );
 
     return NextResponse.json({
       message: assistantMessage,
