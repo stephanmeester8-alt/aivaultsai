@@ -1,8 +1,17 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { JsonLd } from "@/components/seo/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
+import {
+  ORGANIZATION_SCHEMA,
+  SERVICES_SCHEMA,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+  SITE_URL,
+  WEBSITE_SCHEMA,
+} from "@/lib/site";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -50,6 +59,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="nl" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body id="top" className="font-sans text-ink antialiased">
+        <JsonLd data={ORGANIZATION_SCHEMA} />
+        <JsonLd data={WEBSITE_SCHEMA} />
+        <JsonLd data={SERVICES_SCHEMA} />
         <a className="skip-link" href="#main">
           Ga naar inhoud
         </a>

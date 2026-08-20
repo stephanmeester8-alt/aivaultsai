@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import postgres from "postgres";
 
+import {
+  MAX_BODY_BYTES,
+  MAX_HISTORY_MESSAGES,
+  MAX_OUTPUT_TOKENS,
+  OPENAI_TIMEOUT_MS,
+  buildModelInput,
+  isValidUuid,
+  normalizeHistory,
+  parseAssistantRequest,
+} from "@/lib/assistant/request";
+import {
+  readBearerToken,
+  verifyAssistantApiKey,
+} from "@/lib/assistant/auth";
+import { RateLimiter } from "@/lib/security/rate-limit";
+
 export const runtime = "nodejs";
 
 const SYSTEM_PROMPT = `Je bent de commerciële AIVaultsAI-assistent op de publieke website.
@@ -41,38 +57,28 @@ Startprijzen op de website zijn vanaf €495 voor Web, vanaf €795 voor Website
 
 Als iemand vraagt om direct een afspraak te maken, verwijs dan naar de CTA op de pagina voor een kennismaking. Maak geen afspraak en claim geen agenda-integratie tenzij die daadwerkelijk is aangesloten.`;
 
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
+/**
+ * Rate limiter: per-IP and per-session sliding window.
+ * Tuned via ASSISTANT_RATE_LIMIT (default 20) per ASSISTANT_RATE_WINDOW_MS
+ * (default 60_000). In-memory, per server process.
+ */
+const rateLimiter = new RateLimiter({
+  limit: readPositiveInt(process.env.ASSISTANT_RATE_LIMIT, 20),
+  windowMs: readPositiveInt(process.env.ASSISTANT_RATE_WINDOW_MS, 60_000),
+});
 
-type AssistantRequestBody = {
-  conversationId?: unknown;
-  messages?: unknown;
-};
-
-function isMessage(value: unknown): value is ChatMessage {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const message = value as Record<string, unknown>;
-
-  return (
-    (message.role === "user" || message.role === "assistant") &&
-    typeof message.content === "string" &&
-    message.content.trim().length > 0
-  );
+function readPositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = value === undefined ? Number.NaN : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function isValidUuid(value: unknown): value is string {
-  if (typeof value !== "string") {
-    return false;
+function clientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
   }
-
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return request.headers.get("x-real-ip") ?? "unknown";
 }
 
 function extractText(data: unknown): string {
@@ -132,7 +138,125 @@ function getDatabase() {
   });
 }
 
+async function createConversation(
+  sql: ReturnType<typeof postgres>,
+  sessionId: string,
+): Promise<string> {
+  const created = await sql`
+    INSERT INTO conversations (
+      source,
+      visitor_session_id
+    )
+    VALUES (
+      'ai_assistant',
+      ${sessionId}
+    )
+    RETURNING conversation_id
+  `;
+  return created[0].conversation_id;
+}
+
 export async function POST(request: Request) {
+  /*
+   * ----------------------------------------------------------
+   * 0. Optional shared-secret gate (opt-in).
+   *
+   * When ASSISTANT_API_KEY is configured, every request must present
+   * the key as `Authorization: Bearer <key>`. When it is not
+   * configured, the endpoint remains the anonymous public demo —
+   * see report: authentication depends on missing auth infrastructure.
+   * ----------------------------------------------------------
+   */
+  const expectedApiKey = process.env.ASSISTANT_API_KEY;
+  if (expectedApiKey) {
+    const presented = readBearerToken(request);
+    if (!verifyAssistantApiKey(presented, expectedApiKey)) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized.",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 1. Abuse protection: per-IP rate limit before body parsing.
+   * ----------------------------------------------------------
+   */
+  const ip = clientIp(request);
+  const ipLimit = rateLimiter.check(`ip:${ip}`);
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      {
+        error: "Te veel verzoeken. Probeer het later opnieuw.",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 2. Body size cap, then JSON parse, then validation.
+   * ----------------------------------------------------------
+   */
+  let raw: string;
+  try {
+    raw = await request.text();
+  } catch {
+    return NextResponse.json(
+      { error: "Ongeldige aanvraag." },
+      { status: 400 },
+    );
+  }
+
+  if (raw.length > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "Aanvraag is te groot." },
+      { status: 413 },
+    );
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return NextResponse.json(
+      { error: "Ongeldige JSON." },
+      { status: 400 },
+    );
+  }
+
+  const parsed = parseAssistantRequest(data);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+  }
+  const { conversationId, sessionId, message } = parsed.value;
+
+  /*
+   * ----------------------------------------------------------
+   * 3. Per-session rate limit.
+   * ----------------------------------------------------------
+   */
+  const sessionLimit = rateLimiter.check(`session:${sessionId}`);
+  if (!sessionLimit.allowed) {
+    return NextResponse.json(
+      {
+        error: "Te veel verzoeken. Probeer het later opnieuw.",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(sessionLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -149,104 +273,67 @@ export async function POST(request: Request) {
   let sql: ReturnType<typeof postgres> | null = null;
 
   try {
-    const body = (await request.json()) as AssistantRequestBody;
-
-    const messages = Array.isArray(body.messages)
-      ? body.messages.filter(isMessage).slice(-10)
-      : [];
-
-    if (messages.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Stuur eerst een bericht.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const latestUserMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === "user");
-
-    if (!latestUserMessage) {
-      return NextResponse.json(
-        {
-          error: "Stuur eerst een bericht van de bezoeker.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
     sql = getDatabase();
-
-    let conversationId: string;
 
     /*
      * ----------------------------------------------------------
-     * 1. Resolve or create conversation
+     * 4. Resolve or create conversation — ownership enforced.
+     *
+     * A conversation may only be resumed when BOTH the
+     * conversation_id AND the visitor_session_id match. Anything
+     * else starts a fresh conversation bound to this session, so a
+     * caller can never attach to another session's conversation.
      * ----------------------------------------------------------
      */
-
-    if (isValidUuid(body.conversationId)) {
-      const existingConversation = await sql`
+    let resolvedConversationId: string;
+    if (isValidUuid(conversationId)) {
+      const owned = await sql`
         SELECT conversation_id
         FROM conversations
-        WHERE conversation_id = ${body.conversationId}::uuid
+        WHERE conversation_id = ${conversationId}::uuid
+          AND visitor_session_id = ${sessionId}
         LIMIT 1
       `;
 
-      if (existingConversation.length > 0) {
-        conversationId = existingConversation[0].conversation_id;
-      } else {
-        const createdConversation = await sql`
-          INSERT INTO conversations (
-            source
-          )
-          VALUES (
-            'ai_assistant'
-          )
-          RETURNING conversation_id
-        `;
-
-        conversationId = createdConversation[0].conversation_id;
-      }
+      resolvedConversationId =
+        owned.length > 0
+          ? owned[0].conversation_id
+          : await createConversation(sql, sessionId);
     } else {
-      const createdConversation = await sql`
-        INSERT INTO conversations (
-          source
-        )
-        VALUES (
-          'ai_assistant'
-        )
-        RETURNING conversation_id
-      `;
-
-      conversationId = createdConversation[0].conversation_id;
+      resolvedConversationId = await createConversation(sql, sessionId);
     }
 
     /*
      * ----------------------------------------------------------
-     * 2. Determine next message sequence number
+     * 5. Authoritative history from the database.
+     *
+     * Client-supplied history is never trusted. The model context is
+     * rebuilt from conversation_messages ordered by sequence_number.
+     * ----------------------------------------------------------
+     */
+    const historyRows = await sql`
+      SELECT role, content
+      FROM conversation_messages
+      WHERE conversation_id = ${resolvedConversationId}::uuid
+      ORDER BY sequence_number DESC
+      LIMIT ${MAX_HISTORY_MESSAGES}
+    `;
+    historyRows.reverse();
+    const history = normalizeHistory(historyRows);
+
+    /*
+     * ----------------------------------------------------------
+     * 6. Persist the visitor message and record start event.
      * ----------------------------------------------------------
      */
 
     const sequenceResult = await sql`
       SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_sequence
       FROM conversation_messages
-      WHERE conversation_id = ${conversationId}::uuid
+      WHERE conversation_id = ${resolvedConversationId}::uuid
     `;
 
     const nextSequence = Number(sequenceResult[0].next_sequence);
-
-    /*
-     * ----------------------------------------------------------
-     * 3. Persist visitor message
-     * ----------------------------------------------------------
-     */
 
     await sql`
       INSERT INTO conversation_messages (
@@ -256,20 +343,12 @@ export async function POST(request: Request) {
         sequence_number
       )
       VALUES (
-        ${conversationId}::uuid,
+        ${resolvedConversationId}::uuid,
         'user',
-        ${latestUserMessage.content},
+        ${message},
         ${nextSequence}
       )
     `;
-
-    /*
-     * ----------------------------------------------------------
-     * 4. Record conversation-start event
-     *
-     * Only when this is the first persisted message.
-     * ----------------------------------------------------------
-     */
 
     if (nextSequence === 1) {
       await sql`
@@ -281,67 +360,82 @@ export async function POST(request: Request) {
           metadata
         )
         VALUES (
-          ${conversationId}::uuid,
+          ${resolvedConversationId}::uuid,
           'assistant_conversation_started',
           'ai_assistant',
           'live_assistant',
           ${JSON.stringify({
-            conversationId,
+            conversationId: resolvedConversationId,
           })}::jsonb
         )
       `;
     }
 
-    /*
-     * ----------------------------------------------------------
-     * 5. Update conversation activity
-     * ----------------------------------------------------------
-     */
-
     await sql`
       UPDATE conversations
       SET
         last_activity_at = NOW()
-      WHERE conversation_id = ${conversationId}::uuid
+      WHERE conversation_id = ${resolvedConversationId}::uuid
     `;
 
     /*
      * ----------------------------------------------------------
-     * 6. Ask OpenAI
+     * 7. Ask OpenAI with bounded context and a hard timeout.
      * ----------------------------------------------------------
      */
 
-    const upstream = await fetch(
-      "https://api.openai.com/v1/responses",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+    const modelInput = buildModelInput(history, message);
+
+    let upstream: Response;
+    try {
+      upstream = await fetch(
+        "https://api.openai.com/v1/responses",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model:
+              process.env.OPENAI_ASSISTANT_MODEL ||
+              "gpt-5.6-luna",
+            instructions: SYSTEM_PROMPT,
+            input: modelInput,
+            max_output_tokens: MAX_OUTPUT_TOKENS,
+          }),
+          signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
         },
-        body: JSON.stringify({
-          model:
-            process.env.OPENAI_ASSISTANT_MODEL ||
-            "gpt-5.6-luna",
-          instructions: SYSTEM_PROMPT,
-          input: messages,
-          max_output_tokens: 500,
-        }),
-      },
-    );
+      );
+    } catch (error) {
+      const name = error instanceof Error ? error.name : "unknown";
+      const timedOut = name === "TimeoutError";
+      console.error(
+        "assistant: OpenAI request failed",
+        timedOut ? "timeout" : name,
+      );
+      return NextResponse.json(
+        {
+          error: timedOut
+            ? "De AI-assistent reageert niet op tijd. Probeer het opnieuw."
+            : "De AI-assistent is tijdelijk niet bereikbaar. Probeer het opnieuw.",
+        },
+        {
+          status: timedOut ? 504 : 502,
+        },
+      );
+    }
 
     if (!upstream.ok) {
       console.error(
-        "OpenAI assistant request failed",
+        "assistant: OpenAI upstream error",
         upstream.status,
-        await upstream.text(),
       );
-
       return NextResponse.json(
         {
           error:
             "De AI-assistent is tijdelijk niet beschikbaar. Probeer het zo opnieuw.",
-          conversationId,
+          conversationId: resolvedConversationId,
         },
         {
           status: 502,
@@ -358,7 +452,7 @@ export async function POST(request: Request) {
         {
           error:
             "De assistent gaf geen antwoord terug. Probeer het opnieuw.",
-          conversationId,
+          conversationId: resolvedConversationId,
         },
         {
           status: 502,
@@ -368,7 +462,7 @@ export async function POST(request: Request) {
 
     /*
      * ----------------------------------------------------------
-     * 7. Persist AI response
+     * 8. Persist AI response.
      * ----------------------------------------------------------
      */
 
@@ -382,41 +476,29 @@ export async function POST(request: Request) {
         sequence_number
       )
       VALUES (
-        ${conversationId}::uuid,
+        ${resolvedConversationId}::uuid,
         'assistant',
         ${assistantMessage},
         ${assistantSequence}
       )
     `;
 
-    /*
-     * ----------------------------------------------------------
-     * 8. Update conversation activity again
-     * ----------------------------------------------------------
-     */
-
     await sql`
       UPDATE conversations
       SET
         last_activity_at = NOW()
-      WHERE conversation_id = ${conversationId}::uuid
+      WHERE conversation_id = ${resolvedConversationId}::uuid
     `;
-
-    /*
-     * ----------------------------------------------------------
-     * 9. Return backwards-compatible response
-     *
-     * Existing frontend can continue using "message".
-     * New frontend will also use conversationId.
-     * ----------------------------------------------------------
-     */
 
     return NextResponse.json({
       message: assistantMessage,
-      conversationId,
+      conversationId: resolvedConversationId,
     });
   } catch (error) {
-    console.error("Assistant route error", error);
+    console.error(
+      "assistant: route error",
+      error instanceof Error ? error.name : "unknown",
+    );
 
     return NextResponse.json(
       {

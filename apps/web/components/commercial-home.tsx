@@ -193,6 +193,14 @@ const faqs = [
     "Zijn alle AI-functies standaard inbegrepen?",
     "Nee. De exacte functionaliteit hangt af van het gekozen pakket en de benodigde integraties. Externe software- en API-kosten worden vooraf besproken.",
   ],
+  [
+    "Wat is leadautomatisering?",
+    "AIVaultsAI Flow automatiseert terugkerend werk achter je website: aanvragen, opvolging, e-mail, documenten en koppelingen met bestaande tools.",
+  ],
+  [
+    "Voor welke bedrijven is dit geschikt?",
+    "AIVaultsAI werkt voor bedrijven in onder meer bouw & installatie, lokale dienstverlening, advies & zakelijke dienstverlening en praktijken & afsprakenbedrijven.",
+  ],
 ] as const;
 
 export function CommercialHome() {
@@ -220,9 +228,9 @@ export function CommercialHome() {
             </h1>
 
             <p className="mt-7 max-w-3xl text-base leading-relaxed text-mute sm:text-xl">
-              AIVaultsAI bouwt websites, AI-assistenten en automatiseringen
-              die samen bezoekers kunnen helpen, leads kunnen opvangen en
-              bedrijfsprocessen slimmer kunnen maken.
+              AIVaultsAI helpt bedrijven met websites, AI-assistenten en
+              leadautomatisering: bezoekers opvangen, leads kwalificeren en
+              werk slimmer organiseren.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">

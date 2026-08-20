@@ -41,6 +41,20 @@ export function LiveAssistant() {
    */
   const [conversationId, setConversationId] = useState<string | null>(null);
 
+  /*
+   * Anonymous session identity used by the server to bind conversation
+   * ownership. Generated once per browser and persisted in localStorage.
+   */
+  const [sessionId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const KEY = "aivaultsai_session_id";
+    const existing = window.localStorage.getItem(KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    window.localStorage.setItem(KEY, created);
+    return created;
+  });
+
   async function sendMessage(value: string) {
     const text = value.trim();
 
@@ -69,7 +83,8 @@ export function LiveAssistant() {
         },
         body: JSON.stringify({
           conversationId,
-          messages: nextMessages.slice(-10),
+          sessionId,
+          message: text,
         }),
       });
 

@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "AIVaultsAI — AI agents that work together.";
+export const alt =
+  "AIVaultsAI — Websites, AI-assistenten en leadautomatisering voor bedrijven.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -32,11 +33,11 @@ export default function OpenGraphImage() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ fontSize: 64, lineHeight: 1.05, letterSpacing: "-0.04em", maxWidth: 900 }}>
-            AI agents that work together.
+            Websites, AI-assistenten en leadautomatisering voor bedrijven.
           </div>
           <div style={{ fontSize: 24, color: "#9b968c", maxWidth: 780 }}>
-            An AI agent operating system for real-world work. Specialized agents, controlled
-            execution, evidence, and human oversight.
+            AIVaultsAI bouwt websites, AI-assistenten en automatiseringen die bedrijven
+            helpen bezoekers op te vangen, leads te kwalificeren en werk slimmer te organiseren.
           </div>
         </div>
         <div style={{ display: "flex", color: "#d4af77", fontSize: 18, letterSpacing: "0.16em" }}>
