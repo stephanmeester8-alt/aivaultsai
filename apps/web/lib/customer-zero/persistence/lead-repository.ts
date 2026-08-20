@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db/client";
 import type { LeadIntent, LeadSource, LeadStatus } from "../lead-types";
+import { recordLeadEventWithClient } from "./lead-events";
 
 export interface CreateLeadInput {
   conversationId?: string;
@@ -78,6 +79,17 @@ export async function createLead(
   if (!lead) {
     throw new Error("Lead creation returned no record.");
   }
+
+  // Append-only event: lead_created records what already happened.
+  // Non-fatal: a failed event write must not break lead creation.
+  await recordLeadEventWithClient({
+    leadId: lead.lead_id,
+    conversationId: lead.conversation_id ?? undefined,
+    eventType: "lead_created",
+    source: input.source,
+    origin: input.source === "ai_assistant" ? "live_assistant" : "manual",
+    metadata: { intent: input.intent, status: input.status },
+  });
 
   return {
     leadId: lead.lead_id,

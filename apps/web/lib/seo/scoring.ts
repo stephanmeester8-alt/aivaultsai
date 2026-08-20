@@ -8,6 +8,7 @@
 
 import { analyzeHeadings } from "./html.ts";
 import { isDisallowed } from "./robots.ts";
+import { normalizeUrl, resolveUrl } from "./url-normalization.ts";
 import type { Confidence, DimensionScore, PageData, RobotsInfo, SitemapInfo } from "./types.ts";
 import { DIMENSIONS, DIMENSION_WEIGHTS } from "./weights.ts";
 
@@ -102,6 +103,13 @@ function technicalChecks(input: ScoreInput): Check[] {
 function indexabilityChecks(input: ScoreInput): Check[] {
   const page = targetPage(input.pages, input.target);
   const targetPath = new URL(input.target).pathname;
+  const normalizedSitemapUrls = new Set(
+    (input.sitemap?.urls ?? []).map((url) => normalizeUrl(url)),
+  );
+  const resolvedCanonical =
+    page === null || page.canonical === null
+      ? null
+      : resolveUrl(page.canonical, page.url);
   return [
     {
       label: "target not noindex",
@@ -119,11 +127,17 @@ function indexabilityChecks(input: ScoreInput): Check[] {
     },
     {
       label: "target in sitemap",
-      pass: input.sitemap === null ? null : input.sitemap.urls.includes(input.target),
+      pass:
+        input.sitemap === null
+          ? null
+          : normalizedSitemapUrls.has(normalizeUrl(input.target)),
     },
     {
       label: "canonical matches URL",
-      pass: page === null || page.canonical === null ? null : page.canonical === page.url,
+      pass:
+        page === null || resolvedCanonical === null
+          ? null
+          : normalizeUrl(resolvedCanonical) === normalizeUrl(page.url),
     },
   ];
 }

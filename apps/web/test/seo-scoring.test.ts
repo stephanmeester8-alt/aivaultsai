@@ -214,3 +214,45 @@ test("Case 5: external links are never counted as internal linking", () => {
   assert.equal(linking.mode, "SINGLE_PAGE");
   assert.ok(linking.score < 50);
 });
+
+// --- Indexability normalization (TASK 13) ----------------------------------
+
+function indexabilityMetric(
+  pages: PageData[],
+  sitemapOverride: SitemapInfo,
+  canonicalOverride?: string,
+) {
+  const overridden = canonicalOverride
+    ? pages.map((p) => ({ ...p, canonical: canonicalOverride }))
+    : pages;
+  const { metrics } = scoreSeo({
+    pages: overridden,
+    robots,
+    sitemap: sitemapOverride,
+    target: TARGET,
+    failedUrls: [],
+  });
+  return metrics.find((m) => m.dimension === "Indexability")!;
+}
+
+test("indexability: sitemap with trailing-slash difference still matches", () => {
+  const slashless: SitemapInfo = { ...sitemap, urls: ["https://www.example.com"] };
+  const metric = indexabilityMetric([page()], slashless);
+  assert.equal(metric.score, 100);
+});
+
+test("indexability: canonical with trailing-slash difference still matches", () => {
+  const metric = indexabilityMetric([page()], sitemap, "https://www.example.com");
+  assert.equal(metric.score, 100);
+});
+
+test("indexability: a genuinely different canonical still fails", () => {
+  const metric = indexabilityMetric([page()], sitemap, "https://www.example.com/other");
+  assert.equal(metric.score, 75);
+});
+
+test("indexability: a sitemap missing the target still fails", () => {
+  const missing: SitemapInfo = { ...sitemap, urls: ["https://www.example.com/other"] };
+  const metric = indexabilityMetric([page()], missing);
+  assert.equal(metric.score, 75);
+});
