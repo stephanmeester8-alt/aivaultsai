@@ -95,7 +95,9 @@ export async function crawlSite(
   const failedUrls: string[] = [];
   const disallowedUrls: string[] = [];
   const visited = new Set<string>();
+  const queued = new Set<string>();
   const queue: { url: string; depth: number }[] = [{ url: target.toString(), depth: 0 }];
+  queued.add(target.toString());
   const robotsRules = robots.rules;
 
   while (queue.length > 0 && pages.length < maxUrls) {
@@ -123,16 +125,20 @@ export async function crawlSite(
       pages.push(entry.page);
       if (entry.depth >= maxDepth) continue;
       for (const link of entry.page.internalLinks) {
-        const linkValidation = validateUrl(link.href);
+        // Fragments (#...) are client-side navigation, never separate
+        // crawl resources. Strip them before validation and enqueueing.
+        const href = link.href.split("#")[0];
+        const linkValidation = validateUrl(href);
         if (!linkValidation.ok) continue;
         if (!sameOrigin(linkValidation.url, target)) continue;
-        if (visited.has(link.href)) continue;
+        if (visited.has(href) || queued.has(href)) continue;
         const path = linkValidation.url.pathname + linkValidation.url.search;
         if (isDisallowed(robotsRules, path)) {
-          disallowedUrls.push(link.href);
+          disallowedUrls.push(href);
           continue;
         }
-        queue.push({ url: link.href, depth: entry.depth + 1 });
+        queued.add(href);
+        queue.push({ url: href, depth: entry.depth + 1 });
       }
     }
   }

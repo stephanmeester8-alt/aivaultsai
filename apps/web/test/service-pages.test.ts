@@ -121,3 +121,15 @@ test("answers are evidence-backed: prices only use the known from-prices", () =>
     }
   }
 });
+
+test("every page has a valid absolute OG image (no localhost/private)", () => {
+  for (const page of SERVICE_PAGES) {
+    const og = page.ogImage;
+    assert.ok(og.startsWith("https://"), `${page.slug}: og image must be absolute`);
+    assert.ok(og.includes("aivaultsai.one"), `${page.slug}: og image must be on the AIVaultsAI domain`);
+    assert.ok(og.endsWith("/opengraph-image"), `${page.slug}: og image must point at the shared OG route`);
+    for (const forbidden of ["localhost", "127.0.0.1", "10.", "192.168.", "169.254."]) {
+      assert.ok(!og.includes(forbidden), `${page.slug}: og image must not contain ${forbidden}`);
+    }
+  }
+});

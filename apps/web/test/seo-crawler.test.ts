@@ -198,3 +198,53 @@ test("crawler records anchor links but never crawls them (FIX-002)", async () =>
   assert.equal(home.anchorLinks.length, 2);
   assert.equal(home.internalLinks.length, 1);
 });
+
+test("crawler strips fragments from page links before enqueueing (TASK 18)", async () => {
+  const routes = baseRoutes({
+    "https://www.example.com/": {
+      status: 200,
+      body: '<a href="/#pricing">Prijzen</a><a href="/#live-ai">Demo</a><a href="/over#team">Team</a>',
+    },
+    "https://www.example.com/over": { status: 200, body: "<h1>Over</h1>" },
+  });
+
+  const result = await crawlSite("https://www.example.com/", {
+    deps: { fetchFn: mockFetch(routes), lookupFn },
+    maxUrls: 50,
+    maxDepth: 1,
+    log: () => undefined,
+  });
+
+  // Fragments are client-side navigation: "/#pricing" must resolve to "/"
+  // (already visited) and "/over#team" to "/over". No fragment URLs crawled.
+  assert.equal(result.pages.length, 2);
+  assert.equal(result.failedUrls.length, 0);
+  for (const page of result.pages) {
+    assert.ok(!page.url.includes("#"), `fragment URL must not be crawled: ${page.url}`);
+  }
+  assert.ok(result.pages.some((p) => p.url === "https://www.example.com/"));
+  assert.ok(result.pages.some((p) => p.url === "https://www.example.com/over"));
+});
+
+test("crawler never fetches the same URL twice (duplicate enqueue prevention)", async () => {
+  const routes = baseRoutes({
+    "https://www.example.com/": {
+      status: 200,
+      body: '<a href="/paginA">A</a><a href="/paginA">A2</a><a href="/paginA">A3</a><a href="/ander">Ander</a>',
+    },
+    "https://www.example.com/paginA": { status: 200, body: "<h1>A</h1>" },
+    "https://www.example.com/ander": { status: 200, body: "<h1>Ander</h1>" },
+  });
+
+  const result = await crawlSite("https://www.example.com/", {
+    deps: { fetchFn: mockFetch(routes), lookupFn },
+    maxUrls: 50,
+    maxDepth: 1,
+    log: () => undefined,
+  });
+
+  assert.equal(result.pages.length, 3); // /, /paginA, /ander — paginA exactly once
+  const urls = result.pages.map((p) => p.url);
+  assert.equal(new Set(urls).size, urls.length, "no duplicate page URLs");
+  assert.equal(urls.filter((u) => u === "https://www.example.com/paginA").length, 1);
+});

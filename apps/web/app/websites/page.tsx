@@ -16,6 +16,7 @@ export const metadata: Metadata = {
     siteName: "AIVaultsAI",
     locale: "nl_NL",
     type: "website",
+    images: [{ url: config.ogImage }],
   },
 };
 

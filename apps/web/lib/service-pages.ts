@@ -28,6 +28,8 @@ export interface ServicePageConfig {
   serviceType: string;
   title: string;
   description: string;
+  /** Absolute URL of the shared AIVaultsAI OG image (og:image). */
+  ogImage: string;
   h1: string;
   /** Direct, answer-first entity statement. */
   hero: string;
@@ -44,6 +46,9 @@ export interface ServicePageConfig {
 const CONTACT_MAILTO =
   "https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Kennismaking%20AIVaultsAI";
 
+/** Shared AIVaultsAI OG image (app/opengraph-image.tsx route, reachable live). */
+const OG_IMAGE = `${SITE_URL}/opengraph-image`;
+
 export const SERVICE_PAGES: readonly ServicePageConfig[] = [
   {
     slug: "ai-assistenten",
@@ -53,6 +58,7 @@ export const SERVICE_PAGES: readonly ServicePageConfig[] = [
     title: "AI-assistenten voor bedrijven | AIVaultsAI",
     description:
       "Een AI-assistent die bezoekers te woord staat, vragen beantwoordt en leads opvangt — 24/7. Bouw een digitale medewerker voor je bedrijf.",
+    ogImage: OG_IMAGE,
     h1: "AI-assistenten voor bedrijven",
     hero: "Een AI-assistent van AIVaultsAI is een digitale medewerker die bezoekers te woord staat, vragen beantwoordt en leads opvangt — ook buiten kantooruren.",
     definition:
@@ -115,6 +121,7 @@ export const SERVICE_PAGES: readonly ServicePageConfig[] = [
     title: "Leadautomatisering voor bedrijven | AIVaultsAI",
     description:
       "AIVaultsAI Flow automatiseert terugkerend werk achter je website: aanvragen opvangen, opvolgen en kwalificeren.",
+    ogImage: OG_IMAGE,
     h1: "Leadautomatisering voor bedrijven",
     hero: "AIVaultsAI Flow automatiseert terugkerend werk achter je website: aanvragen, opvolging, e-mail, documenten en koppelingen met bestaande tools.",
     definition:
@@ -173,6 +180,7 @@ export const SERVICE_PAGES: readonly ServicePageConfig[] = [
     title: "Websites die leads opleveren | AIVaultsAI",
     description:
       "Snelle, professionele websites die bezoekers naar een duidelijke volgende stap sturen — mobiel-first en conversiegericht.",
+    ogImage: OG_IMAGE,
     h1: "Websites die leads opleveren",
     hero: "AIVaultsAI bouwt snelle, professionele websites die bezoekers niet alleen informeren, maar naar een duidelijke volgende stap sturen.",
     definition:
