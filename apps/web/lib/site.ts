@@ -13,19 +13,20 @@ export const SITE_DESCRIPTION =
   "AIVaultsAI bouwt websites, AI-assistenten en automatiseringen die bedrijven helpen bezoekers op te vangen, leads te kwalificeren en werk slimmer te organiseren.";
 
 export const NAV = [
-  { href: "#solutions", label: "Oplossingen" },
-  { href: "#ai", label: "AI-assistent" },
-  { href: "#automation", label: "Automatisering" },
-  { href: "#pricing", label: "Aanbod" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/websites", label: "Websites" },
+  { href: "/ai-assistenten", label: "AI-assistenten" },
+  { href: "/leadautomatisering", label: "Automatisering" },
+  { href: "/#pricing", label: "Aanbod" },
+  { href: "/#faq", label: "FAQ" },
 ] as const;
 
 export const FOOTER_LINKS = [
-  { href: "#solutions", label: "Oplossingen" },
-  { href: "#pricing", label: "Aanbod" },
-  { href: "#how-it-works", label: "Zo werkt het" },
-  { href: "#faq", label: "FAQ" },
-  { href: "#contact", label: "Contact" },
+  { href: "/websites", label: "Websites" },
+  { href: "/ai-assistenten", label: "AI-assistenten" },
+  { href: "/leadautomatisering", label: "Leadautomatisering" },
+  { href: "/#pricing", label: "Aanbod" },
+  { href: "/#faq", label: "FAQ" },
+  { href: "/#contact", label: "Contact" },
 ] as const;
 
 /**

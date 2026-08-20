@@ -15,7 +15,7 @@ const solutions = [
       "Conversiegerichte CTA's",
       "Hosting en SSL",
     ],
-    href: "#pricing",
+    href: "/websites",
   },
   {
     number: "02",
@@ -30,7 +30,7 @@ const solutions = [
       "Afspraken",
       "Meertalig mogelijk",
     ],
-    href: "#ai",
+    href: "/ai-assistenten",
   },
   {
     number: "03",
@@ -45,7 +45,7 @@ const solutions = [
       "Tool-integraties",
       "Maatwerk workflows",
     ],
-    href: "#automation",
+    href: "/leadautomatisering",
   },
 ] as const;
 
