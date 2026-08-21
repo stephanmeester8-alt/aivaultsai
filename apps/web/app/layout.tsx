@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { ConsentBanner } from "@/components/consent-banner";
 import { JsonLd } from "@/components/seo/json-ld";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { buildGtagInitScript } from "@/lib/analytics/gtag";
 import {
   ORGANIZATION_SCHEMA,
   SERVICES_SCHEMA,
@@ -13,6 +16,12 @@ import {
   WEBSITE_SCHEMA,
 } from "@/lib/site";
 import "./globals.css";
+
+/**
+ * GA4 is loaded ONLY when NEXT_PUBLIC_GA_MEASUREMENT_ID exists.
+ * Without it: no script, no banner, analytics fully disabled.
+ */
+const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -62,6 +71,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <JsonLd data={ORGANIZATION_SCHEMA} />
         <JsonLd data={WEBSITE_SCHEMA} />
         <JsonLd data={SERVICES_SCHEMA} />
+        {gaMeasurementId ? (
+          <>
+            <Script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script
+              id="gtag-init"
+              strategy="afterInteractive"
+              dangerouslySetInnerHTML={{ __html: buildGtagInitScript(gaMeasurementId) }}
+            />
+            <ConsentBanner />
+          </>
+        ) : null}
         <a className="skip-link" href="#main">
           Ga naar inhoud
         </a>

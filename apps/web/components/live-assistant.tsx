@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+
+import { trackClientEvent } from "@/lib/analytics/gtag";
+import {
+  classifySource,
+  type Attribution,
+} from "@/lib/traffic/attribution";
 
 type Message = {
   role: "user" | "assistant";
@@ -55,6 +61,28 @@ export function LiveAssistant() {
     return created;
   });
 
+  /*
+   * First-touch attribution, captured once per browser session and sent
+   * only with the first assistant request (when no conversation exists).
+   */
+  const attributionRef = useRef<Attribution | null>(null);
+
+  function getAttribution(): Attribution | null {
+    if (attributionRef.current) return attributionRef.current;
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const attribution: Attribution = {
+      landing_page: window.location.pathname,
+      ...(document.referrer ? { referrer_origin: document.referrer } : {}),
+      ...(params.get("utm_source") ? { utm_source: params.get("utm_source")! } : {}),
+      ...(params.get("utm_medium") ? { utm_medium: params.get("utm_medium")! } : {}),
+      ...(params.get("utm_campaign") ? { utm_campaign: params.get("utm_campaign")! } : {}),
+      ...(params.get("gclid") ? { gclid: params.get("gclid")! } : {}),
+    };
+    attributionRef.current = attribution;
+    return attribution;
+  }
+
   async function sendMessage(value: string) {
     const text = value.trim();
 
@@ -80,6 +108,7 @@ export function LiveAssistant() {
         sessionId,
         message: text,
         ...(conversationId ? { conversationId } : {}),
+        ...(!conversationId ? { attribution: getAttribution() } : {}),
       };
 
       const response = await fetch("/api/assistant", {
@@ -108,6 +137,17 @@ export function LiveAssistant() {
        */
       if (data.conversationId && data.conversationId !== conversationId) {
         setConversationId(data.conversationId);
+        const attribution = attributionRef.current;
+        if (attribution) {
+          trackClientEvent("assistant_started", {
+            source: classifySource(
+              attribution.referrer_origin,
+              attribution.utm_medium,
+              Boolean(attribution.gclid),
+            ),
+            landing_page: attribution.landing_page ?? undefined,
+          });
+        }
       }
 
       setMessages((current) => [

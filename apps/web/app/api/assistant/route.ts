@@ -16,6 +16,10 @@ import {
   maybeRunCustomerZeroOrchestration,
 } from "@/lib/customer-zero/assistant-funnel";
 import {
+  parseClientAttribution,
+  type Attribution,
+} from "@/lib/traffic/attribution";
+import {
   readBearerToken,
   verifyAssistantApiKey,
 } from "@/lib/assistant/auth";
@@ -145,15 +149,18 @@ function getDatabase() {
 async function createConversation(
   sql: ReturnType<typeof postgres>,
   sessionId: string,
+  attribution: Attribution = {},
 ): Promise<string> {
   const created = await sql`
     INSERT INTO conversations (
       source,
-      visitor_session_id
+      visitor_session_id,
+      metadata
     )
     VALUES (
       'ai_assistant',
-      ${sessionId}
+      ${sessionId},
+      ${JSON.stringify(attribution)}::jsonb
     )
     RETURNING conversation_id
   `;
@@ -244,6 +251,14 @@ export async function POST(request: Request) {
   const { conversationId, sessionId, message } = parsed.value;
 
   /*
+   * Organic attribution (first-touch) — captured only when a conversation
+   * is created. Client input is fully untrusted and sanitized server-side;
+   * malformed attribution can never fail the request.
+   */
+  const rawBody = data as Record<string, unknown>;
+  const attribution = parseClientAttribution(rawBody["attribution"]);
+
+  /*
    * ----------------------------------------------------------
    * 3. Per-session rate limit.
    * ----------------------------------------------------------
@@ -302,9 +317,9 @@ export async function POST(request: Request) {
       resolvedConversationId =
         owned.length > 0
           ? owned[0].conversation_id
-          : await createConversation(sql, sessionId);
+          : await createConversation(sql, sessionId, attribution);
     } else {
-      resolvedConversationId = await createConversation(sql, sessionId);
+      resolvedConversationId = await createConversation(sql, sessionId, attribution);
     }
 
     /*

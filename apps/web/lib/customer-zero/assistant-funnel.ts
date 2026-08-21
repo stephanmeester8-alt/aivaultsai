@@ -12,6 +12,7 @@
  */
 
 import type { CustomerZeroInput, CustomerZeroResult } from "./orchestrator";
+import { fireFunnelAnalytics } from "../analytics/gtag.ts";
 
 export interface FunnelDeps {
   /** Whether a lead already exists for this conversation. */
@@ -35,7 +36,9 @@ export async function maybeRunCustomerZeroOrchestration(
     if (hasLead) {
       return { ran: false, reason: "lead_exists" };
     }
-    await deps.runOrchestrator(input);
+    const result = await deps.runOrchestrator(input);
+    // GA4 observability only — never decides anything; non-fatal.
+    await fireFunnelAnalytics(input.conversationId, result);
     return { ran: true, reason: "ran" };
   } catch (error) {
     // Funnel wiring must never break the assistant response.
