@@ -9,6 +9,7 @@ import {
 interface RecordedCall {
   leadId: unknown;
   conversationId: unknown;
+  messageId: unknown;
   eventType: string;
   source: string;
   origin: string;
@@ -20,9 +21,10 @@ function fakeSql(): { sql: LeadEventSql; calls: RecordedCall[] } {
     calls.push({
       leadId: values[0],
       conversationId: values[1],
-      eventType: String(values[2]),
-      source: String(values[3]),
-      origin: String(values[4]),
+      messageId: values[2],
+      eventType: String(values[3]),
+      source: String(values[4]),
+      origin: String(values[5]),
     });
     return [];
   };
@@ -72,6 +74,18 @@ test("records a lead qualified event", async () => {
   assert.equal(calls[0]!.eventType, "lead_qualified");
 });
 
+test("correlates the event to the triggering message id", async () => {
+  const { sql, calls } = fakeSql();
+  await recordLeadEvent(sql, {
+    conversationId: "conv-1",
+    messageId: "msg-7",
+    eventType: "assistant_commercial_intent_detected",
+    source: "ai_assistant",
+    origin: "live_assistant",
+  });
+  assert.equal(calls[0]!.messageId, "msg-7");
+});
+
 test("emits exactly one insert per invocation (no duplicates)", async () => {
   const { sql, calls } = fakeSql();
   await recordLeadEvent(sql, { eventType: "lead_created", source: "x", origin: "manual" });
@@ -89,6 +103,7 @@ test("undefined ids are written as null (nullable FK columns)", async () => {
     origin: "live_assistant",
   });
   assert.equal(calls[0]!.leadId, null);
+  assert.equal(calls[0]!.messageId, null);
 });
 
 test("a failed event write does not corrupt the flow", async () => {

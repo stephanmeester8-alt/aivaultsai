@@ -60,6 +60,7 @@ test("agent definitions have permission boundaries", () => {
     "WEB_SEARCH",
     "WEB_READ",
     "WEB_NAVIGATE",
+    "API_REQUEST",
   ]);
   assert.ok(RESEARCH_INTELLIGENCE.prohibitedPermissions.includes("WEB_TYPE"));
   assert.ok(RESEARCH_INTELLIGENCE.prohibitedPermissions.includes("WEB_UPLOAD"));

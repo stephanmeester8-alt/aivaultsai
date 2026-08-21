@@ -16,6 +16,8 @@ export type LeadEventSql = (
 export interface LeadEventInput {
   leadId?: string;
   conversationId?: string;
+  /** Optional correlation to the message that produced the event. */
+  messageId?: string;
   eventType: string;
   source: string;
   origin: string;
@@ -35,6 +37,7 @@ export async function recordLeadEvent(
       INSERT INTO lead_events (
         lead_id,
         conversation_id,
+        message_id,
         event_type,
         source,
         origin,
@@ -43,6 +46,7 @@ export async function recordLeadEvent(
       VALUES (
         ${input.leadId ?? null},
         ${input.conversationId ?? null},
+        ${input.messageId ?? null},
         ${input.eventType},
         ${input.source},
         ${input.origin},

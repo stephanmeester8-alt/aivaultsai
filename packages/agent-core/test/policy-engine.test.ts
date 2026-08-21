@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   BROWSER_TOOL,
   FILESYSTEM_TOOL,
+  HTTP_TOOL,
   RESEARCH_INTELLIGENCE,
   TERMINAL_TOOL,
   createAgentRegistry,
@@ -482,4 +483,40 @@ test("mismatched approval id is DENY", () => {
     }),
   );
   assert.equal(result.decision, "DENY");
+});
+
+test("research agent is authorized for the http tool with API_REQUEST (MEDIUM)", () => {
+  // Contract (TASK 24): RESEARCH_INTELLIGENCE allows the http tool and now
+  // also holds the API_REQUEST permission it requires, so the safe read-only
+  // production runtime execution is policy-ALLOWED without human approval.
+  const result = evaluatePolicy(
+    request({
+      agentId: "research_intelligence",
+      toolId: "http",
+      requestedPermissions: ["API_REQUEST"],
+      riskLevel: "MEDIUM",
+    }),
+    agents,
+    toolsWith(enable(HTTP_TOOL)),
+    null,
+  );
+  assert.equal(result.decision, "ALLOW");
+  assert.equal(result.approvalRequired, false);
+});
+
+test("http tool remains disabled in the default catalog", () => {
+  assert.equal(getToolDefinition("http").enabled, false);
+  const result = evaluatePolicy(
+    request({
+      agentId: "research_intelligence",
+      toolId: "http",
+      requestedPermissions: ["API_REQUEST"],
+      riskLevel: "MEDIUM",
+    }),
+    agents,
+    createInitialToolRegistry(),
+    null,
+  );
+  assert.equal(result.decision, "DENY");
+  assert.match(result.reason, /disabled/);
 });

@@ -299,6 +299,7 @@ test("approval does not modify AgentDefinition permissions", () => {
     "WEB_SEARCH",
     "WEB_READ",
     "WEB_NAVIGATE",
+    "API_REQUEST",
   ]);
 });
 

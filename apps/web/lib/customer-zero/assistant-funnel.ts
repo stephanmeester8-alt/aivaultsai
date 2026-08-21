@@ -19,6 +19,12 @@ export interface FunnelDeps {
   hasExistingLead: (conversationId: string) => Promise<boolean>;
   /** Runs the existing orchestrator (intent -> createLead -> events). */
   runOrchestrator: (input: CustomerZeroInput) => Promise<CustomerZeroResult>;
+  /**
+   * Optional post-lead agent runtime step (Customer-Zero -> Agent Runtime).
+   * Runs only when the orchestrator created a lead; idempotent per
+   * conversation; non-fatal.
+   */
+  runRuntimeTask?: (conversationId: string) => Promise<unknown>;
 }
 
 export interface FunnelOutcome {
@@ -37,6 +43,18 @@ export async function maybeRunCustomerZeroOrchestration(
       return { ran: false, reason: "lead_exists" };
     }
     const result = await deps.runOrchestrator(input);
+    // Customer-Zero -> Agent Runtime: one safe, idempotent runtime task per
+    // lead conversation. Never affects the assistant reply.
+    if (result.leadCreated) {
+      try {
+        await deps.runRuntimeTask?.(input.conversationId);
+      } catch (error) {
+        console.error(
+          "[assistant-funnel] agent runtime task failed",
+          error instanceof Error ? error.name : "unknown",
+        );
+      }
+    }
     // GA4 observability only — never decides anything; non-fatal.
     await fireFunnelAnalytics(input.conversationId, result);
     return { ran: true, reason: "ran" };
@@ -66,6 +84,12 @@ export function createDefaultFunnelDeps(): FunnelDeps {
     runOrchestrator: async (input) => {
       const { runCustomerZeroOrchestrator } = await import("./orchestrator");
       return runCustomerZeroOrchestrator(input);
+    },
+    runRuntimeTask: async (conversationId) => {
+      const { runConversationRuntimeTask } = await import(
+        "../agent-runtime/runtime-adapter"
+      );
+      return runConversationRuntimeTask(conversationId);
     },
   };
 }

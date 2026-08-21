@@ -98,3 +98,48 @@ test("non-commercial intent leaves the flow untouched (orchestrator decides)", a
   // that no lead is created for non-commercial intent.
   assert.equal(outcome.ran, true);
 });
+
+test("runs the agent runtime task exactly once when a lead was created", async () => {
+  const runtimeCalls: string[] = [];
+  const d = deps({
+    runRuntimeTask: async (conversationId) => {
+      runtimeCalls.push(conversationId);
+    },
+  });
+  await maybeRunCustomerZeroOrchestration(
+    { conversationId: "conv-1", messages: [{ role: "user", content: "afspraak plannen" }] },
+    d,
+  );
+  assert.deepEqual(runtimeCalls, ["conv-1"]);
+});
+
+test("does not run the runtime task when no lead was created", async () => {
+  const runtimeCalls: string[] = [];
+  const d = deps({
+    runOrchestrator: async () => {
+      return { intent: { level: "INFORMATIONAL", detected: false, score: 0, reasons: [] }, leadCreated: false };
+    },
+    runRuntimeTask: async (conversationId) => {
+      runtimeCalls.push(conversationId);
+    },
+  });
+  await maybeRunCustomerZeroOrchestration(
+    { conversationId: "conv-1", messages: [] },
+    d,
+  );
+  assert.deepEqual(runtimeCalls, []);
+});
+
+test("a failing runtime task does not break the funnel (non-fatal)", async () => {
+  const d = deps({
+    runRuntimeTask: async () => {
+      throw new Error("runtime unavailable");
+    },
+  });
+  const outcome = await maybeRunCustomerZeroOrchestration(
+    { conversationId: "conv-1", messages: [{ role: "user", content: "afspraak plannen" }] },
+    d,
+  );
+  assert.equal(outcome.ran, true);
+  assert.equal(outcome.reason, "ran");
+});
