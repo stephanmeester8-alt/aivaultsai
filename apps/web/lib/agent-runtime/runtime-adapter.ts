@@ -52,18 +52,33 @@ function buildAdapterRegistry(core: typeof import("@aivaultsai/agent-core")) {
   return registry;
 }
 
+/**
+ * Recorder writes are fire-and-forget inside agent-core by design. In
+ * serverless the function may be frozen right after the response, dropping
+ * pending writes — so the adapter tracks them and flushes before returning.
+ */
+const pendingRecorderWrites = new Set<Promise<void>>();
+
 /** Append-only audit sink; a failed write never breaks the run. */
 function createLazyRecorder(): RunRecorder {
   return {
     record(entry: RunRecordEntry) {
       try {
-        return (async () => {
+        const promise = (async () => {
           const {
             createDefaultPostgresRunRecorder,
           } = await import("../runtime/postgres-run-recorder");
           const recorder = await createDefaultPostgresRunRecorder();
           return recorder.record(entry as never);
         })();
+        pendingRecorderWrites.add(promise);
+        promise.catch(() => {
+          /* recorder failures are non-fatal */
+        });
+        promise.then(() => {
+          pendingRecorderWrites.delete(promise);
+        });
+        return promise;
       } catch (error) {
         console.error(
           "[agent-runtime] recorder failed",
@@ -72,6 +87,11 @@ function createLazyRecorder(): RunRecorder {
       }
     },
   };
+}
+
+async function flushRecorderWrites(): Promise<void> {
+  if (pendingRecorderWrites.size === 0) return;
+  await Promise.allSettled([...pendingRecorderWrites]);
 }
 
 /**
@@ -175,17 +195,23 @@ export async function runConversationRuntimeTask(
     };
 
     // Persist the run id once the run reached a terminal state so the step
-    // never repeats for this conversation.
+    // never repeats for this conversation. The object is passed directly
+    // (no JSON.stringify) so both the neon client and postgres.js store a
+    // jsonb OBJECT, never a double-encoded jsonb string.
     if (run.state === "COMPLETED" || run.state === "FAILED") {
       await sql`
         UPDATE conversations
         SET
           metadata = metadata
-            || ${JSON.stringify({ runtime_run_id: runId })}::jsonb,
+            || ${({ runtime_run_id: runId })}::jsonb,
           last_activity_at = NOW()
         WHERE conversation_id = ${conversationId}::uuid
       `;
     }
+
+    // Flush pending recorder writes (evidence/execution/run rows) before the
+    // serverless function returns; otherwise they may be dropped.
+    await flushRecorderWrites();
 
     return outcome;
   } catch (error) {

@@ -160,7 +160,7 @@ async function createConversation(
     VALUES (
       'ai_assistant',
       ${sessionId},
-      ${JSON.stringify(attribution)}::jsonb
+      ${sql.json(attribution)}::jsonb
     )
     RETURNING conversation_id
   `;
@@ -387,7 +387,7 @@ export async function POST(request: Request) {
           'assistant_conversation_started',
           'ai_assistant',
           'live_assistant',
-          ${JSON.stringify({
+          ${sql.json({
             conversationId: resolvedConversationId,
           })}::jsonb
         )
