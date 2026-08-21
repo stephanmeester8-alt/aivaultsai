@@ -153,6 +153,14 @@ export class EvidenceStore {
         "provenance.executionOccurred must be a boolean",
       );
     }
+    if (provenance.executionId !== undefined && provenance.executionId !== null) {
+      if (typeof provenance.executionId !== "string" || provenance.executionId.trim().length === 0) {
+        throw new EvidenceStoreError(
+          "INVALID_EVIDENCE",
+          "provenance.executionId must be a non-empty string when set",
+        );
+      }
+    }
   }
 
   #assertOptionalRefs(evidence: Evidence): void {
@@ -166,27 +174,27 @@ export class EvidenceStore {
 
   #assertExecutionRules(evidence: Evidence): void {
     const provenance = evidence.provenance;
-    if (provenance.executionOccurred === true) {
-      throw new EvidenceStoreError(
-        "INVALID_EVIDENCE",
-        "executionOccurred cannot be true; no tool execution exists in this phase",
-      );
-    }
     if (provenance.origin === "browser" || provenance.toolId === "browser") {
       throw new EvidenceStoreError(
         "INVALID_EVIDENCE",
         "browser provenance cannot be recorded as actual browser execution",
       );
     }
-    if (
-      looksLikeExecutionClaim(evidence.claim) &&
-      (evidence.type === "FACT" || evidence.type === "INDEPENDENTLY_VERIFIED")
-    ) {
-      throw new EvidenceStoreError(
-        "INVALID_EVIDENCE",
-        "execution claims cannot be stored as FACT or INDEPENDENTLY_VERIFIED without execution",
-      );
+    if (provenance.executionOccurred === false) {
+      // No execution claim may be stored as a fact without execution.
+      if (
+        looksLikeExecutionClaim(evidence.claim) &&
+        (evidence.type === "FACT" || evidence.type === "INDEPENDENTLY_VERIFIED")
+      ) {
+        throw new EvidenceStoreError(
+          "INVALID_EVIDENCE",
+          "execution claims cannot be stored as FACT or INDEPENDENTLY_VERIFIED without execution",
+        );
+      }
     }
+    // executionOccurred === true is accepted ONLY as real execution evidence:
+    // the caller (Execution Gate / runtime) must assert a tool actually ran.
+    // The store itself still never upgrades epistemic types.
   }
 }
 

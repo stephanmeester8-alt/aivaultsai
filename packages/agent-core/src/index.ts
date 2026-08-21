@@ -25,10 +25,13 @@ export {
 export type { Task, TaskCreatedBy, TaskPriority, TaskStatus } from "./tasks/types.ts";
 export {
   TASK_PRIORITIES,
+  TASK_PRIORITY_MIN,
+  TASK_PRIORITY_MAX,
   TASK_STATUSES,
   createTask,
   isValidTaskPriority,
   isValidTaskStatus,
+  riskToPriority,
 } from "./tasks/types.ts";
 export { TaskEngineError, isTaskEngineError } from "./tasks/errors.ts";
 export type { TaskEngineErrorCode } from "./tasks/errors.ts";
@@ -76,6 +79,7 @@ export {
   createInitialToolRegistry,
   createToolRegistry,
 } from "./tools/registry.ts";
+export { FilesystemAdapter, HttpAdapter, createSafeAdapterRegistry } from "./tools/adapters/index.ts";
 
 export type { Permission, PermissionDecision } from "./permissions/types.ts";
 export { PERMISSIONS, isValidPermission } from "./permissions/types.ts";
@@ -119,3 +123,13 @@ export type { ToolAdapter } from "./execution/adapters.ts";
 export { ToolAdapterRegistry, createToolAdapterRegistry } from "./execution/adapters.ts";
 export { ExecutionGate, createExecutionGate } from "./execution/gate.ts";
 export type { ExecutionGateDependencies } from "./execution/gate.ts";
+
+export type { RunRecorder, RunRecordEntry } from "./persistence/types.ts";
+export { NoopRunRecorder } from "./persistence/types.ts";
+
+export type { AgentRun, AgentRunRequest, AgentRunState } from "./runtime/types.ts";
+export { AGENT_RUN_STATES } from "./runtime/types.ts";
+export { RuntimeError, isRuntimeError } from "./runtime/errors.ts";
+export type { RuntimeErrorCode } from "./runtime/errors.ts";
+export { AgentRuntime, createAgentRuntime } from "./runtime/agent-runtime.ts";
+export type { AgentRuntimeDependencies } from "./runtime/agent-runtime.ts";

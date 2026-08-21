@@ -2,6 +2,10 @@ import { detectCommercialIntent } from "./commercial-intent";
 import type { CommercialIntentResult } from "./commercial-intent";
 import { createLead } from "./persistence/lead-repository";
 import { recordLeadEventWithClient } from "./persistence/lead-events";
+import {
+  createQualificationWithClient,
+  type QualificationConfidence,
+} from "./persistence/qualification-repository";
 import type { LeadIntent } from "./lead-types";
 
 export interface OrchestratorMessage {
@@ -18,6 +22,9 @@ export interface CustomerZeroResult {
   intent: CommercialIntentResult;
   leadCreated: boolean;
   leadId?: string;
+  /** True when a qualification record was persisted for a QUALIFIED lead. */
+  qualificationPersisted?: boolean;
+  qualificationId?: string;
 }
 
 function mapIntentToLeadIntent(
@@ -37,6 +44,15 @@ function mapIntentToLeadIntent(
     default:
       return "unknown";
   }
+}
+
+/** Map the intent score (0-10) onto the qualification scale (0-100). */
+function qualificationScore(intent: CommercialIntentResult): number {
+  return Math.min(100, Math.max(0, intent.score * 10));
+}
+
+function qualificationConfidence(intent: CommercialIntentResult): QualificationConfidence {
+  return intent.level === "HIGH_COMMERCIAL_INTENT" ? "HIGH" : "MEDIUM";
 }
 
 export async function runCustomerZeroOrchestrator(
@@ -81,24 +97,85 @@ export async function runCustomerZeroOrchestrator(
     },
   });
 
-  if (lead.status === "QUALIFIED") {
-    await recordLeadEventWithClient({
+  // The lead_created event is the originating trace for qualification.
+  const leadCreatedEventId = await recordLeadEventWithClient({
+    leadId: lead.leadId,
+    conversationId: input.conversationId,
+    eventType: "lead_created",
+    source: "ai_assistant",
+    origin: "live_assistant",
+    metadata: {
+      intent: leadIntent,
+      commercialIntentLevel: intent.level,
+    },
+  });
+
+  if (lead.status !== "QUALIFIED") {
+    return {
+      intent,
+      leadCreated: true,
       leadId: lead.leadId,
-      conversationId: input.conversationId,
-      eventType: "lead_qualified",
-      source: "ai_assistant",
-      origin: "live_assistant",
-      metadata: {
-        qualifiedBy: "customer_zero_orchestrator",
-        commercialIntentLevel: intent.level,
-        commercialIntentScore: intent.score,
-      },
-    });
+      qualificationPersisted: false,
+    };
   }
+
+  // Persist the qualification ASSESSMENT (never `status = QUALIFIED` alone).
+  // The lead_qualifications table requires at least one supporting event id;
+  // without the lead_created event id we cannot produce a compliant record
+  // and must not invent one — so the qualification is skipped and logged.
+  let qualificationPersisted = false;
+  let qualificationId: string | undefined;
+  if (leadCreatedEventId) {
+    try {
+      const persisted = await createQualificationWithClient({
+        leadId: lead.leadId,
+        score: qualificationScore(intent),
+        confidence: qualificationConfidence(intent),
+        reason:
+          intent.reasons.length > 0
+            ? intent.reasons.join("; ")
+            : `commercial intent level: ${intent.level}`,
+        qualifiedBy: "customer_zero_orchestrator",
+        supportingEventIds: [leadCreatedEventId],
+        metadata: {
+          commercialIntentLevel: intent.level,
+          commercialIntentScore: intent.score,
+        },
+      });
+      qualificationPersisted = true;
+      qualificationId = persisted.qualificationId;
+    } catch (error) {
+      console.error(
+        "[customer-zero] qualification persistence failed",
+        error instanceof Error ? error.name : "unknown",
+      );
+    }
+  } else {
+    console.error(
+      "[customer-zero] qualification skipped: lead_created event id unavailable",
+    );
+  }
+
+  await recordLeadEventWithClient({
+    leadId: lead.leadId,
+    conversationId: input.conversationId,
+    eventType: "lead_qualified",
+    source: "ai_assistant",
+    origin: "live_assistant",
+    metadata: {
+      qualifiedBy: "customer_zero_orchestrator",
+      commercialIntentLevel: intent.level,
+      commercialIntentScore: intent.score,
+      qualificationPersisted,
+      qualificationId: qualificationId ?? null,
+    },
+  });
 
   return {
     intent,
     leadCreated: true,
     leadId: lead.leadId,
+    qualificationPersisted,
+    qualificationId,
   };
 }

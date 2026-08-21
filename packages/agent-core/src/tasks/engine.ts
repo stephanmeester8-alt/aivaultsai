@@ -34,6 +34,7 @@ function now(): string {
 function cloneTask(task: Task): Task {
   return {
     ...task,
+    failureReason: task.failureReason ?? null,
     inputs: { ...task.inputs },
     dependencies: [...task.dependencies],
   };
@@ -153,6 +154,107 @@ export class TaskEngine {
     return cloneTask(updated);
   }
 
+  /**
+   * Validate a stored task against its invariants without mutating state.
+   * Returns a list of problems; an empty list means the task is valid.
+   */
+  validateTask(taskId: string): string[] {
+    const task = this.#requireTask(taskId);
+    const problems: string[] = [];
+    if (!isNonEmptyString(task.title)) problems.push("title must be a non-empty string");
+    if (!isNonEmptyString(task.objective)) problems.push("objective must be a non-empty string");
+    if (!isValidTaskPriority(task.priority)) problems.push(`invalid priority: ${String(task.priority)}`);
+    if (!isValidRiskLevel(task.riskLevel)) problems.push(`invalid riskLevel: ${String(task.riskLevel)}`);
+    if (WORK_STATUSES.includes(task.status) && task.assignedTo === null) {
+      problems.push(`${task.status} requires an assigned agent`);
+    }
+    if (task.status === "DONE" && task.evidenceRequired) {
+      problems.push("DONE requires linked Evidence when evidenceRequired is true");
+    }
+    return problems;
+  }
+
+  /** BACKLOG -> READY: make a recorded task ready to start. */
+  scheduleTask(taskId: string): Task {
+    return this.transitionTask(taskId, "READY");
+  }
+
+  /** READY -> IN_PROGRESS: begin work (requires an assigned agent). */
+  executeTask(taskId: string): Task {
+    return this.transitionTask(taskId, "IN_PROGRESS");
+  }
+
+  /**
+   * REVIEW -> DONE. When the task declares evidenceRequired, the caller must
+   * prove linked evidence (evidenceLinked: true) or the transition is refused.
+   */
+  completeTask(
+    taskId: string,
+    options: { evidenceLinked?: boolean } = {},
+  ): Task {
+    const current = this.#requireTask(taskId);
+    if (current.evidenceRequired && options.evidenceLinked !== true) {
+      throw new TaskEngineError(
+        "EVIDENCE_REQUIRED",
+        `Task ${taskId} requires linked Evidence before DONE`,
+      );
+    }
+    return this.transitionTask(taskId, "DONE");
+  }
+
+  /** IN_PROGRESS | REVIEW -> FAILED, recording why. */
+  failTask(taskId: string, reason: string): Task {
+    const current = this.#requireTask(taskId);
+    if (current.status !== "IN_PROGRESS" && current.status !== "REVIEW") {
+      throw new TaskEngineError(
+        "INVALID_TRANSITION",
+        `Task ${taskId} in ${current.status} cannot be failed`,
+      );
+    }
+    if (!isNonEmptyString(reason)) {
+      throw new TaskEngineError("INVALID_TASK", "failure reason must be a non-empty string");
+    }
+    const updated = this.#replace(taskId, {
+      ...current,
+      status: "FAILED",
+      failureReason: reason,
+      updatedAt: now(),
+    });
+    this.#recordEvent({
+      taskId,
+      type: "TASK_STATUS_CHANGED",
+      fromStatus: current.status,
+      toStatus: "FAILED",
+      actor: current.assignedTo ?? current.createdBy,
+    });
+    return cloneTask(updated);
+  }
+
+  /** FAILED | BLOCKED -> READY, clearing the recorded failure reason. */
+  retryTask(taskId: string): Task {
+    const current = this.#requireTask(taskId);
+    if (current.status !== "FAILED" && current.status !== "BLOCKED") {
+      throw new TaskEngineError(
+        "INVALID_TRANSITION",
+        `Task ${taskId} in ${current.status} cannot be retried`,
+      );
+    }
+    const updated = this.#replace(taskId, {
+      ...current,
+      status: "READY",
+      failureReason: null,
+      updatedAt: now(),
+    });
+    this.#recordEvent({
+      taskId,
+      type: "TASK_STATUS_CHANGED",
+      fromStatus: current.status,
+      toStatus: "READY",
+      actor: current.assignedTo ?? current.createdBy,
+    });
+    return cloneTask(updated);
+  }
+
   updateTask(taskId: string, patch: TaskPatch): Task {
     const current = this.#requireTask(taskId);
     if ("status" in patch || "assignedTo" in patch || "taskId" in patch || "createdBy" in patch) {
@@ -240,6 +342,11 @@ export class TaskEngine {
     }
     if (typeof task.evidenceRequired !== "boolean") {
       throw new TaskEngineError("INVALID_TASK", "evidenceRequired must be a boolean");
+    }
+    if (task.failureReason !== undefined && task.failureReason !== null) {
+      if (typeof task.failureReason !== "string" || task.failureReason.trim().length === 0) {
+        throw new TaskEngineError("INVALID_TASK", "failureReason must be a non-empty string or null");
+      }
     }
     if (!isNonEmptyString(task.createdAt) || !isNonEmptyString(task.updatedAt)) {
       throw new TaskEngineError("INVALID_TASK", "createdAt and updatedAt must be non-empty strings");

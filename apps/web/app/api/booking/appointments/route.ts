@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { BookingService } from "@/lib/booking/service";
-import { MockCalendarProvider } from "@/lib/booking/providers/mock-calendar-provider";
+import { createProductionCalendarProvider } from "@/lib/booking/provider-factory";
+import { CalendarUnavailableError } from "@/lib/booking/providers/unavailable-calendar-provider";
 
 export const runtime = "nodejs";
 
+// Production path: no real calendar provider is connected, so appointments
+// can never be created. The response is an explicit 503, never a fake
+// confirmation.
 const bookingService = new BookingService(
-  new MockCalendarProvider(),
+  createProductionCalendarProvider(),
 );
 
 type AppointmentBody = {
@@ -116,6 +120,16 @@ export async function POST(request: Request) {
       appointment,
     });
   } catch (error) {
+    if (error instanceof CalendarUnavailableError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          available: false,
+          error: error.message,
+        },
+        { status: 503 },
+      );
+    }
     console.error(
       "Appointment creation failed:",
       error,

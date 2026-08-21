@@ -21,6 +21,7 @@ export type ExecutionRequest = {
   readonly requestedPermissions: readonly Permission[] | readonly string[];
   readonly riskLevel: string;
   readonly approvalId: string | null;
+  /** Tool invocation input: `{ capability, arguments }` per ToolDefinition.inputSchema. */
   readonly input: Readonly<Record<string, unknown>>;
   readonly authorization?: PolicyResult | null;
 };
@@ -33,7 +34,10 @@ export type ExecutionResult = {
   readonly agentId: string;
   readonly output: unknown;
   readonly error: string | null;
-  readonly executionOccurred: false;
+  /** True only when a tool adapter actually ran. */
+  readonly executionOccurred: boolean;
   readonly startedAt: string;
   readonly completedAt: string;
 };
+
+export type ToolCapability = string;

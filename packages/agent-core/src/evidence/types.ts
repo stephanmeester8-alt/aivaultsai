@@ -32,6 +32,8 @@ export type EvidenceProvenance = {
   readonly method: string;
   readonly origin?: ProvenanceOrigin;
   readonly executionOccurred?: boolean;
+  /** ExecutionGate execution id, required for real execution evidence. */
+  readonly executionId?: string | null;
 };
 
 export type Evidence = {

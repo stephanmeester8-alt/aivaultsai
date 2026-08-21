@@ -1,6 +1,6 @@
 # Execution Gate
 
-**Status:** IMPLEMENTED as a fail-closed authorization boundary. Actual tool execution is **not implemented**. Every authorized attempt returns `NOT_IMPLEMENTED`.
+**Status:** IMPLEMENTED as a fail-closed authorization AND execution boundary. A request executes ONLY when policy ALLOW ∧ approval satisfied ∧ tool enabled ∧ adapter registered ∧ input valid. With no adapter the gate returns `NOT_IMPLEMENTED` (explicit unavailable); with an adapter it returns the real `SUCCEEDED`/`FAILED` result (`executionOccurred: true`). Browser/terminal/mcp have no adapters.
 
 ## Execution boundary
 

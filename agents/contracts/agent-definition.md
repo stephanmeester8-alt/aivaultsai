@@ -1,6 +1,6 @@
 # AgentDefinition
 
-**Status:** DESIGNED. Runtime validation: NOT IMPLEMENTED.
+**Status:** IMPLEMENTED in `packages/agent-core`: five typed `AgentDefinition` constants and an in-memory `AgentRegistry` (see `docs/architecture/agent-system.md`). The markdown files in `agents/definitions/` remain the human-readable definition source; they are not parsed by the runtime. Runtime validation of the markdown schema itself: NOT IMPLEMENTED (the registry validates the typed records instead).
 
 Every specialist agent must eventually conform to this contract. This file is the schema, not an executable type.
 
@@ -8,10 +8,11 @@ Every specialist agent must eventually conform to this contract. This file is th
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `id` | string | yes | Stable identifier, kebab-case, unique in the registry |
+| `id` | string | yes | Stable identifier, kebab-case in markdown / snake_case in TypeScript (`AgentId`), unique in the registry |
 | `name` | string | yes | Human-readable name |
 | `role` | string | yes | Functional role title |
 | `mission` | string | yes | One-sentence mission |
+| `description` | string | yes | Short human-readable summary |
 | `capabilities` | string[] | yes | Reasoning and domain capabilities this agent may exercise |
 | `allowed_tools` | string[] | yes | Tool ids or capability names this agent may request. Empty means none. |
 | `prohibited_tools` | string[] | yes | Tool ids or capability names this agent must never request |
@@ -19,6 +20,8 @@ Every specialist agent must eventually conform to this contract. This file is th
 | `output_schema` | object | yes | Expected output shape |
 | `handoff_targets` | string[] | yes | Agent ids this agent may hand off to |
 | `risk_level` | `RiskLevel` | yes | Typical risk of this agent's work. Action risk may be higher. |
+
+The TypeScript records additionally carry `status` (`ACTIVE | INACTIVE | DEPRECATED`) and `allowedPermissions` / `prohibitedPermissions` (permission-level boundaries used by the policy engine).
 
 ## RiskLevel
 

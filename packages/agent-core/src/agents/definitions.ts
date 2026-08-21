@@ -5,6 +5,8 @@ export const CTO_ARCHITECT: AgentDefinition = {
   name: "CTO / AI Systems Architect",
   role: "Technical strategy and architecture owner",
   mission: "Own technical strategy and architecture.",
+  description:
+    "Owns technical strategy and architecture: what should be built and how it should be architected.",
   status: "ACTIVE",
   capabilities: ["ARCHITECTURE"],
   allowedTools: [],
@@ -31,6 +33,37 @@ export const CTO_ARCHITECT: AgentDefinition = {
     "growth_analytics",
   ],
   riskLevel: "MEDIUM",
+  inputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      objective: { type: "string" },
+      inputs: {
+        type: "object",
+        properties: {
+          problem: { type: "string" },
+          constraints: { type: "object" },
+          current_architecture: { type: ["object", "null"] },
+          non_functional_requirements: { type: "object" },
+        },
+      },
+      evidence_required: { type: "boolean" },
+      risk_level: { type: "string" },
+    },
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      summary: { type: "string" },
+      findings: { type: "array" },
+      decisions: { type: "array" },
+      evidence_ids: { type: "array" },
+      risks: { type: "array" },
+      open_questions: { type: "array" },
+      recommended_next_action: { type: "string" },
+    },
+  },
 };
 
 export const RESEARCH_INTELLIGENCE: AgentDefinition = {
@@ -38,6 +71,8 @@ export const RESEARCH_INTELLIGENCE: AgentDefinition = {
   name: "Research Intelligence",
   role: "External knowledge acquisition and verification",
   mission: "Acquire and verify external knowledge.",
+  description:
+    "Acquires and verifies external knowledge: what do we actually know and what evidence supports it.",
   status: "ACTIVE",
   capabilities: ["RESEARCH", "WEB_RESEARCH", "EVIDENCE_COLLECTION"],
   allowedTools: ["browser", "http"],
@@ -59,6 +94,37 @@ export const RESEARCH_INTELLIGENCE: AgentDefinition = {
     "growth_analytics",
   ],
   riskLevel: "MEDIUM",
+  inputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      objective: { type: "string" },
+      inputs: {
+        type: "object",
+        properties: {
+          research_question: { type: "string" },
+          scope: { type: "object" },
+          required_source_types: { type: "array" },
+          known_claims: { type: "array" },
+        },
+      },
+      evidence_required: { type: "boolean" },
+      risk_level: { type: "string" },
+    },
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      summary: { type: "string" },
+      findings: { type: "array" },
+      decisions: { type: "array" },
+      evidence_ids: { type: "array" },
+      risks: { type: "array" },
+      open_questions: { type: "array" },
+      recommended_next_action: { type: "string" },
+    },
+  },
 };
 
 export const PRODUCT_UX: AgentDefinition = {
@@ -66,6 +132,8 @@ export const PRODUCT_UX: AgentDefinition = {
   name: "Product / UX",
   role: "Product and user-experience design",
   mission: "Translate customer problems into useful products.",
+  description:
+    "Designs products and user experiences: what should we build for the customer and why will they use it.",
   status: "ACTIVE",
   capabilities: ["PRODUCT_STRATEGY", "UX_DESIGN"],
   allowedTools: [],
@@ -88,6 +156,37 @@ export const PRODUCT_UX: AgentDefinition = {
     "growth_analytics",
   ],
   riskLevel: "MEDIUM",
+  inputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      objective: { type: "string" },
+      inputs: {
+        type: "object",
+        properties: {
+          customer_problem: { type: "string" },
+          icp: { type: ["object", "null"] },
+          constraints: { type: "object" },
+          research_evidence_ids: { type: "array" },
+        },
+      },
+      evidence_required: { type: "boolean" },
+      risk_level: { type: "string" },
+    },
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      summary: { type: "string" },
+      findings: { type: "array" },
+      decisions: { type: "array" },
+      evidence_ids: { type: "array" },
+      risks: { type: "array" },
+      open_questions: { type: "array" },
+      recommended_next_action: { type: "string" },
+    },
+  },
 };
 
 export const PRINCIPAL_ENGINEER: AgentDefinition = {
@@ -95,6 +194,8 @@ export const PRINCIPAL_ENGINEER: AgentDefinition = {
   name: "Principal AI Full-Stack Engineer",
   role: "Production software implementation",
   mission: "Turn approved architecture and product requirements into production software.",
+  description:
+    "Implements production software: how do we implement this correctly, with evidence and tests.",
   status: "ACTIVE",
   capabilities: ["ENGINEERING", "CODE", "TESTING"],
   allowedTools: ["filesystem", "terminal"],
@@ -118,6 +219,37 @@ export const PRINCIPAL_ENGINEER: AgentDefinition = {
     "growth_analytics",
   ],
   riskLevel: "HIGH",
+  inputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      objective: { type: "string" },
+      inputs: {
+        type: "object",
+        properties: {
+          architecture_decision_ids: { type: "array" },
+          requirements: { type: "object" },
+          constraints: { type: "object" },
+          authorized_scope: { type: "object" },
+        },
+      },
+      evidence_required: { type: "boolean" },
+      risk_level: { type: "string" },
+    },
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      summary: { type: "string" },
+      findings: { type: "array" },
+      decisions: { type: "array" },
+      evidence_ids: { type: "array" },
+      risks: { type: "array" },
+      open_questions: { type: "array" },
+      recommended_next_action: { type: "string" },
+    },
+  },
 };
 
 export const GROWTH_ANALYTICS: AgentDefinition = {
@@ -125,6 +257,8 @@ export const GROWTH_ANALYTICS: AgentDefinition = {
   name: "Growth / Analytics",
   role: "Growth measurement and improvement",
   mission: "Measure and improve business growth.",
+  description:
+    "Measures and improves business growth: what is working and how can we improve it.",
   status: "ACTIVE",
   capabilities: ["ANALYTICS", "SEO", "GROWTH"],
   allowedTools: ["browser"],
@@ -148,6 +282,37 @@ export const GROWTH_ANALYTICS: AgentDefinition = {
     "principal_engineer",
   ],
   riskLevel: "MEDIUM",
+  inputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      objective: { type: "string" },
+      inputs: {
+        type: "object",
+        properties: {
+          kpi_question: { type: "string" },
+          metrics: { type: ["object", "null"] },
+          experiment: { type: ["object", "null"] },
+          research_evidence_ids: { type: "array" },
+        },
+      },
+      evidence_required: { type: "boolean" },
+      risk_level: { type: "string" },
+    },
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      task_id: { type: "string" },
+      summary: { type: "string" },
+      findings: { type: "array" },
+      decisions: { type: "array" },
+      evidence_ids: { type: "array" },
+      risks: { type: "array" },
+      open_questions: { type: "array" },
+      recommended_next_action: { type: "string" },
+    },
+  },
 };
 
 export const INITIAL_AGENTS: readonly AgentDefinition[] = [

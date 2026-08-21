@@ -1,6 +1,6 @@
 # Orchestrator
 
-**Status:** IMPLEMENTED as a deterministic in-memory coordinator in `packages/agent-core`. It does not execute tools, call models, or finish work.
+**Status:** IMPLEMENTED as a deterministic in-memory coordinator in `packages/agent-core`. `start()` stops at `READY_FOR_EXECUTION`; `execute()` runs the authorized request through the Execution Gate and records execution evidence exclusively from the gate result. It never calls models directly.
 
 ## Responsibility
 
@@ -70,14 +70,15 @@ CREATED → ASSIGNED → POLICY_CHECK
 POLICY_CHECK → WAITING_FOR_APPROVAL | AUTHORIZED | FAILED
 WAITING_FOR_APPROVAL → POLICY_CHECK
 AUTHORIZED → READY_FOR_EXECUTION
-READY_FOR_EXECUTION | FAILED | BLOCKED → (terminal)
+READY_FOR_EXECUTION → EXECUTING          (explicit execute())
+EXECUTING → COMPLETED | FAILED | HANDED_OFF
+COMPLETED → HANDED_OFF                    (handoff() after completion)
+READY_FOR_EXECUTION | FAILED | BLOCKED → (terminal unless execute()/retry)
 ```
 
 ## Execution boundary
 
-There is no `executeTool`, `runBrowser`, `runHermes`, `runAgent`, or `callLLM`.
-
-`READY_FOR_EXECUTION` means: policy allowed the requested action (and approval was valid if required). It does **not** mean a tool ran.
+There is no `runBrowser`, `runHermes`, `runAgent`, or `callLLM`. Execution happens only through `execute()`, which re-checks everything via the Execution Gate and calls the registered tool adapter. `READY_FOR_EXECUTION` means: policy allowed the requested action (and approval was valid if required). It does **not** mean a tool ran — only a `SUCCEEDED` gate result means execution occurred.
 
 ## What is implemented
 

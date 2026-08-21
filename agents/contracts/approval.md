@@ -1,6 +1,6 @@
 # Approval
 
-**Status:** DESIGNED. Approval workflow: NOT IMPLEMENTED.
+**Status:** IMPLEMENTED as an in-memory `ApprovalEngine` in `packages/agent-core` (see `docs/security/approval-engine.md`). Approval UI/workflow, authentication and background expiry: NOT IMPLEMENTED.
 
 An `Approval` is the human-in-the-loop gate for high-risk actions.
 
@@ -12,7 +12,7 @@ No autonomous execution of `HIGH` or `CRITICAL` actions is authorized by this co
 |---|---|---|---|
 | `approval_id` | string | yes | Unique identifier |
 | `task_id` | string | yes | Related task |
-| `requested_action` | string \| object | yes | Action to authorize, including tool, capability, and scope |
+| `requested_action` | string | yes | Action to authorize (tool:permission string), including tool, capability, and scope |
 | `risk_level` | `RiskLevel` | yes | Assessed risk of the requested action |
 | `requested_by` | string | yes | Agent id or system actor requesting approval |
 | `approved_by` | string \| null | yes | Human actor who resolved it, or null while pending |

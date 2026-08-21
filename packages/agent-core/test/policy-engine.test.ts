@@ -36,11 +36,12 @@ function request(
   partial: Partial<PolicyRequest> &
     Pick<PolicyRequest, "agentId" | "toolId" | "requestedPermissions" | "riskLevel">,
 ): PolicyRequest {
+  const { approvalId, taskId, ...rest } = partial;
   return {
-    requestId: partial.requestId ?? "req_001",
-    approvalId: partial.approvalId,
-    taskId: partial.taskId,
-    ...partial,
+    requestId: rest.requestId ?? "req_001",
+    ...(approvalId !== undefined ? { approvalId } : {}),
+    ...(taskId !== undefined ? { taskId } : {}),
+    ...rest,
   };
 }
 

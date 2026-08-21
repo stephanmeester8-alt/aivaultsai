@@ -18,7 +18,7 @@ function baseTask(overrides: Partial<Task> = {}): Task {
     objective: "Produce a scoped architecture recommendation",
     createdBy: "human",
     assignedTo: null,
-    priority: "MEDIUM",
+    priority: 3,
     status: "BACKLOG",
     riskLevel: "LOW",
     inputs: { topic: "task engine" },
@@ -214,18 +214,16 @@ test("DONE cannot transition", () => {
   );
 });
 
-test("FAILED cannot transition", () => {
+test("FAILED can only be retried back to READY", () => {
   const engine = createTaskEngine(agents);
   engine.createTask(baseTask({ status: "READY", assignedTo: "cto_architect" }));
   engine.transitionTask("task_001", "IN_PROGRESS");
   engine.transitionTask("task_001", "FAILED");
-  assert.throws(
-    () => engine.transitionTask("task_001", "READY"),
-    (error: unknown) => {
-      expectCode(error, "INVALID_TRANSITION");
-      return true;
-    },
-  );
+  // Retry is the ONLY legal exit from FAILED.
+  assert.equal(engine.retryTask("task_001").status, "READY");
+  // After retry the task is schedulable again.
+  engine.transitionTask("task_001", "IN_PROGRESS");
+  assert.equal(engine.getTask("task_001").status, "IN_PROGRESS");
 });
 
 test("invalid task data is rejected", () => {
@@ -252,7 +250,7 @@ test("invalid task data is rejected", () => {
     },
   );
   assert.throws(
-    () => engine.createTask(baseTask({ priority: "URGENT" as Task["priority"] })),
+    () => engine.createTask(baseTask({ priority: 9 as Task["priority"] })),
     (error: unknown) => {
       expectCode(error, "INVALID_TASK");
       return true;
@@ -263,10 +261,14 @@ test("invalid task data is rejected", () => {
 test("internal task state cannot be mutated externally", () => {
   const engine = createTaskEngine(agents);
   engine.createTask(baseTask({ inputs: { topic: "task engine" } }));
-  const copy = engine.getTask("task_001");
+  const copy = engine.getTask("task_001") as unknown as {
+    title: string;
+    inputs: Record<string, unknown>;
+    dependencies: string[];
+  };
   copy.title = "mutated";
-  (copy.inputs as Record<string, unknown>).topic = "hacked";
-  (copy.dependencies as string[]).push("task_other");
+  copy.inputs.topic = "hacked";
+  copy.dependencies.push("task_other");
   const stored = engine.getTask("task_001");
   assert.equal(stored.title, "Draft architecture note");
   assert.equal(stored.inputs.topic, "task engine");

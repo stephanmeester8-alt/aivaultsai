@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { BookingService } from "@/lib/booking/service";
-import { MockCalendarProvider } from "@/lib/booking/providers/mock-calendar-provider";
+import { createProductionCalendarProvider } from "@/lib/booking/provider-factory";
 
 export const runtime = "nodejs";
 
+// Production path: selects the explicit unavailable state until a real
+// calendar integration exists. Never invents slots.
 const bookingService = new BookingService(
-  new MockCalendarProvider(),
+  createProductionCalendarProvider(),
 );
 
 type AvailabilityBody = {

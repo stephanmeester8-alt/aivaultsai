@@ -1,7 +1,14 @@
 import type { AgentId } from "../agents/ids.ts";
 import type { RiskLevel } from "../permissions/risk.ts";
 
-export const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+/**
+ * Canonical priority contract: integer 1..5, LOWER number = HIGHER priority
+ * (see agents/contracts/task.md). Priority is independent of RiskLevel.
+ */
+export const TASK_PRIORITY_MIN = 1;
+export const TASK_PRIORITY_MAX = 5;
+
+export const TASK_PRIORITIES = [1, 2, 3, 4, 5] as const;
 
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
@@ -32,16 +39,42 @@ export type Task = {
   readonly expectedOutput: string;
   readonly dependencies: readonly string[];
   readonly evidenceRequired: boolean;
+  /** Set when the task transitions to FAILED; cleared on retry. Optional on
+   * input; the engine normalizes stored records to always carry the field. */
+  readonly failureReason?: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
 
 export function isValidTaskPriority(value: unknown): value is TaskPriority {
-  return typeof value === "string" && (TASK_PRIORITIES as readonly string[]).includes(value);
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= TASK_PRIORITY_MIN &&
+    value <= TASK_PRIORITY_MAX
+  );
 }
 
 export function isValidTaskStatus(value: unknown): value is TaskStatus {
   return typeof value === "string" && (TASK_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * Default priority mapping used when a request does not supply one.
+ * Higher risk maps to a more urgent (lower) priority number.
+ * Callers may override with an explicit priority.
+ */
+export function riskToPriority(risk: RiskLevel): TaskPriority {
+  switch (risk) {
+    case "LOW":
+      return 4;
+    case "MEDIUM":
+      return 3;
+    case "HIGH":
+      return 2;
+    case "CRITICAL":
+      return 1;
+  }
 }
 
 export function createTask(input: Task): Task {

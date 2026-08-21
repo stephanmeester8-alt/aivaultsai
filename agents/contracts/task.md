@@ -1,6 +1,6 @@
 # Task
 
-**Status:** DESIGNED. Task engine: NOT IMPLEMENTED.
+**Status:** IMPLEMENTED as an in-memory `TaskEngine` in `packages/agent-core` (see `docs/architecture/task-engine.md`). Full lifecycle: create, schedule, execute, complete, fail, retry, validate.
 
 A `Task` is the unit of work the orchestrator assigns to an agent.
 
@@ -13,15 +13,16 @@ A `Task` is the unit of work the orchestrator assigns to an agent.
 | `objective` | string | yes | What done means |
 | `created_by` | string | yes | Agent id, system, or human actor |
 | `assigned_to` | string \| null | yes | Agent id, or null if unassigned |
-| `priority` | integer | yes | Lower number = higher priority. Designed range: 1–5 |
+| `priority` | integer | yes | Lower number = higher priority. Range: 1–5. Independent of `risk_level`. |
 | `status` | `TaskStatus` | yes | Current lifecycle status |
 | `inputs` | object | yes | Structured inputs. May be empty. |
-| `expected_output` | string \| object | yes | Acceptance criteria |
+| `expected_output` | string | yes | Acceptance criteria |
 | `dependencies` | string[] | yes | Other `task_id` values that must complete first |
 | `evidence_required` | boolean | yes | If true, `DONE` requires one or more `Evidence` records |
 | `risk_level` | `RiskLevel` | yes | Highest expected risk of completing this task |
-| `created_at` | datetime | yes | Creation timestamp (UTC) |
-| `updated_at` | datetime | yes | Last transition timestamp (UTC) |
+| `created_at` | string | yes | Creation timestamp (ISO-8601 UTC) |
+| `updated_at` | string | yes | Last transition timestamp (ISO-8601 UTC) |
+| `failure_reason` | string \| null | no | Set when the task fails; cleared on retry |
 
 ## TaskStatus
 

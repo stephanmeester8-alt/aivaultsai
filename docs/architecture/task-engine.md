@@ -1,6 +1,6 @@
 # Task Engine
 
-**Status:** IMPLEMENTED as an in-memory lifecycle manager in `packages/agent-core`. It does not execute tools, call agents, or persist data.
+**Status:** IMPLEMENTED as an in-memory lifecycle manager in `packages/agent-core`. Full lifecycle: `createTask`, `scheduleTask`, `executeTask`, `completeTask`, `failTask`, `retryTask`, `validateTask`. It does not execute tools, call agents, or persist data.
 
 ## Responsibilities
 
@@ -37,6 +37,8 @@ IN_PROGRESS → FAILED
 BLOCKED → READY
 REVIEW → IN_PROGRESS
 REVIEW → DONE
+REVIEW → FAILED
+FAILED → READY (explicit retry only, via retryTask)
 ```
 
 Tasks may be created only in `BACKLOG` or `READY`. `IN_PROGRESS` and `REVIEW` require `assignedTo`.
@@ -49,9 +51,9 @@ Tasks may be created only in `BACKLOG` or `READY`. `IN_PROGRESS` and `REVIEW` re
 | `READY` | `IN_PROGRESS`, `BLOCKED` |
 | `IN_PROGRESS` | `REVIEW`, `BLOCKED`, `FAILED` |
 | `BLOCKED` | `READY` |
-| `REVIEW` | `IN_PROGRESS`, `DONE` |
+| `REVIEW` | `IN_PROGRESS`, `DONE`, `FAILED` |
 | `DONE` | none |
-| `FAILED` | none |
+| `FAILED` | `READY` (retry) |
 
 Any other change is `INVALID_TRANSITION`. Do not scatter extra status logic outside this table (`TASK_TRANSITIONS`).
 

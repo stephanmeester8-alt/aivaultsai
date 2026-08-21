@@ -76,7 +76,7 @@ Authorization remains `evaluatePolicy`. The Handoff Engine must not grant or byp
 
 ## Evidence references
 
-`evidenceIds` is a list of string IDs. Shape is checked. Existence is not. There is no Evidence Store in this task.
+`evidenceIds` is a list of string IDs. Shape is checked. Existence is not: the Handoff Engine never fabricates evidence references; the Evidence Store is the source of truth for records.
 
 ## Immutability
 

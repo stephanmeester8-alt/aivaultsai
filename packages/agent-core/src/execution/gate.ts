@@ -9,6 +9,7 @@ import { isValidRiskLevel } from "../permissions/risk.ts";
 import type { TaskEngine } from "../tasks/engine.ts";
 import type { ToolRegistry } from "../tools/registry.ts";
 import type { ToolAdapterRegistry } from "./adapters.ts";
+import { notImplementedResult, rejectedResult } from "./result.ts";
 import type { ExecutionRequest, ExecutionResult } from "./types.ts";
 
 export type ExecutionGateDependencies = {
@@ -19,46 +20,18 @@ export type ExecutionGateDependencies = {
   readonly adapters: ToolAdapterRegistry;
 };
 
-function now(): string {
-  return new Date().toISOString();
-}
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function rejected(request: ExecutionRequest, error: string): ExecutionResult {
-  const timestamp = now();
-  return {
-    executionId: request.executionId,
-    status: "REJECTED",
-    toolId: request.toolId,
-    taskId: request.taskId,
-    agentId: String(request.agentId),
-    output: null,
-    error,
-    executionOccurred: false,
-    startedAt: timestamp,
-    completedAt: timestamp,
-  };
-}
-
-function notImplemented(request: ExecutionRequest, error: string): ExecutionResult {
-  const timestamp = now();
-  return {
-    executionId: request.executionId,
-    status: "NOT_IMPLEMENTED",
-    toolId: request.toolId,
-    taskId: request.taskId,
-    agentId: String(request.agentId),
-    output: null,
-    error,
-    executionOccurred: false,
-    startedAt: timestamp,
-    completedAt: timestamp,
-  };
-}
-
+/**
+ * Authorization + execution boundary. Executes ONLY when every condition
+ * holds: policy ALLOW, approval satisfied (APPROVED or not required),
+ * tool enabled, adapter registered, input valid. Any failure is REJECTED
+ * before execution; a missing adapter is an explicit NOT_IMPLEMENTED
+ * (unavailable) state. Adapters run only inside this gate — agents and the
+ * orchestrator never call adapters directly.
+ */
 export class ExecutionGate {
   readonly #deps: ExecutionGateDependencies;
 
@@ -66,41 +39,37 @@ export class ExecutionGate {
     this.#deps = dependencies;
   }
 
-  /**
-   * Authorization + adapter boundary. Never executes tools in this phase.
-   * Does not call adapter.execute(). Does not write execution evidence.
-   */
-  execute(request: ExecutionRequest): ExecutionResult {
+  async execute(request: ExecutionRequest): Promise<ExecutionResult> {
     if (!isNonEmptyString(request.executionId) || !isNonEmptyString(request.requestedAction)) {
-      return rejected(request, "Invalid execution request");
+      return rejectedResult(request, "Invalid execution request");
     }
     if ("authorization" in request && request.authorization == null) {
-      return rejected(request, "Missing authorization");
+      return rejectedResult(request, "Missing authorization");
     }
     if (!isValidRiskLevel(request.riskLevel)) {
-      return rejected(request, `Invalid risk level: ${String(request.riskLevel)}`);
+      return rejectedResult(request, `Invalid risk level: ${String(request.riskLevel)}`);
     }
     if (!isValidAgentId(request.agentId) || !this.#deps.agents.has(request.agentId)) {
-      return rejected(request, `Unknown agent: ${String(request.agentId)}`);
+      return rejectedResult(request, `Unknown agent: ${String(request.agentId)}`);
     }
     if (!isNonEmptyString(request.taskId) || !this.#deps.tasks.hasTask(request.taskId)) {
-      return rejected(request, `Unknown task: ${request.taskId}`);
+      return rejectedResult(request, `Unknown task: ${request.taskId}`);
     }
     const tool = this.#deps.tools.get(request.toolId);
     if (!tool) {
-      return rejected(request, `Unknown tool: ${request.toolId}`);
+      return rejectedResult(request, `Unknown tool: ${request.toolId}`);
     }
     if (!tool.enabled) {
-      return rejected(request, `Tool ${tool.id} is disabled`);
+      return rejectedResult(request, `Tool ${tool.id} is disabled`);
     }
     if (!Array.isArray(request.requestedPermissions)) {
-      return rejected(request, "Invalid permission list");
+      return rejectedResult(request, "Invalid permission list");
     }
     const unknownPermissions = request.requestedPermissions.filter(
       (permission) => !isValidPermission(permission),
     );
     if (unknownPermissions.length > 0) {
-      return rejected(request, `Invalid permission: ${unknownPermissions.join(", ")}`);
+      return rejectedResult(request, `Invalid permission: ${unknownPermissions.join(", ")}`);
     }
 
     const approval =
@@ -108,20 +77,20 @@ export class ExecutionGate {
         ? this.#deps.approvals.getApproval(request.approvalId)
         : null;
     if (request.approvalId && !approval) {
-      return rejected(request, `Invalid approval: ${request.approvalId}`);
+      return rejectedResult(request, `Invalid approval: ${request.approvalId}`);
     }
     if (approval) {
       if (approval.taskId !== request.taskId) {
-        return rejected(request, "Approval is bound to a different task");
+        return rejectedResult(request, "Approval is bound to a different task");
       }
       if (approval.requestedAction !== request.requestedAction) {
-        return rejected(request, "Approval is bound to a different action");
+        return rejectedResult(request, "Approval is bound to a different action");
       }
       if (!isApprovalRiskSufficient(approval.riskLevel, request.riskLevel)) {
-        return rejected(request, "Approval risk is insufficient");
+        return rejectedResult(request, "Approval risk is insufficient");
       }
     } else if (requiresHumanApproval(request.riskLevel)) {
-      return rejected(request, "APPROVAL_REQUIRED");
+      return rejectedResult(request, "APPROVAL_REQUIRED");
     }
 
     const policy = evaluatePolicy(
@@ -131,37 +100,54 @@ export class ExecutionGate {
         toolId: request.toolId,
         requestedPermissions: request.requestedPermissions,
         riskLevel: request.riskLevel,
-        approvalId: request.approvalId ?? undefined,
-        taskId: request.taskId,
+        ...(request.approvalId ? { approvalId: request.approvalId } : {}),
+        ...(request.taskId ? { taskId: request.taskId } : {}),
       },
       this.#deps.agents,
       this.#deps.tools,
       approval,
     );
     if (request.authorization && request.authorization.decision !== policy.decision) {
-      return rejected(request, "Supplied authorization does not match evaluatePolicy");
+      return rejectedResult(request, "Supplied authorization does not match evaluatePolicy");
     }
     if (policy.decision === "DENY") {
-      return rejected(request, policy.reason);
+      return rejectedResult(request, policy.reason);
     }
     if (policy.decision === "APPROVAL_REQUIRED") {
-      return rejected(request, policy.reason);
+      return rejectedResult(request, policy.reason);
     }
     if (policy.decision !== "ALLOW") {
-      return rejected(request, "Authorization failed closed");
+      return rejectedResult(request, "Authorization failed closed");
     }
 
     const adapter = this.#deps.adapters.getByTool(request.toolId);
     if (!adapter) {
-      return notImplemented(
+      // Authorized but explicitly unavailable: no adapter is registered for
+      // this tool (e.g. browser, terminal, mcp). Nothing may execute.
+      return notImplementedResult(
         request,
-        "No tool adapter is registered; execution is not implemented",
+        `No adapter is registered for tool ${request.toolId}; execution unavailable`,
       );
     }
-    return notImplemented(
-      request,
-      "Tool adapters are not invoked in this phase; execution is not implemented",
-    );
+
+    try {
+      return await adapter.execute(request);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const timestamp = new Date().toISOString();
+      return {
+        executionId: request.executionId,
+        status: "FAILED",
+        toolId: request.toolId,
+        taskId: request.taskId,
+        agentId: String(request.agentId),
+        output: null,
+        error: `Adapter crashed: ${message}`,
+        executionOccurred: true,
+        startedAt: timestamp,
+        completedAt: timestamp,
+      };
+    }
   }
 }
 

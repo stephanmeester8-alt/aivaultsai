@@ -28,7 +28,7 @@ function baseTask(overrides: Partial<Task> = {}): Task {
     objective: "Prepare a scoped write after human approval",
     createdBy: "human",
     assignedTo: "principal_engineer",
-    priority: "HIGH",
+    priority: 2,
     status: "READY",
     riskLevel: "HIGH",
     inputs: {},
@@ -289,7 +289,10 @@ test("approval can be queried by agent", () => {
 test("returned approval cannot mutate internal state", () => {
   const { approvals } = setup();
   approvals.createApproval(baseApproval());
-  const copy = approvals.getApproval("apr_001");
+  const copy = approvals.getApproval("apr_001") as unknown as {
+    status: string;
+    requestedAction: string;
+  };
   copy.status = "APPROVED";
   copy.requestedAction = "mutated";
   const stored = approvals.getApproval("apr_001");

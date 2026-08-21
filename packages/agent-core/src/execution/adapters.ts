@@ -2,8 +2,10 @@ import type { ToolId } from "../tools/types.ts";
 import type { ExecutionRequest, ExecutionResult } from "./types.ts";
 
 /**
- * Future tool-execution adapter. No adapter is implemented or registered
- * in this task. execute() must not be called by agents or the orchestrator.
+ * Tool execution seam. Adapters run the actual side effect (filesystem,
+ * HTTP, …). They are only reachable through the Execution Gate: agents and
+ * the orchestrator never call an adapter directly. An adapter that is not
+ * registered means the tool is explicitly unavailable — nothing executes.
  */
 export type ToolAdapter = {
   readonly id: string;

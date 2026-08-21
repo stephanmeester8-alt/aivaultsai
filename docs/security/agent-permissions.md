@@ -1,6 +1,6 @@
 # Agent permissions and policy
 
-**Status:** DESIGNED. Policy engine: NOT IMPLEMENTED. Approval runtime: NOT IMPLEMENTED.
+**Status:** Policy engine: IMPLEMENTED as a pure decision function in `packages/agent-core` (`evaluatePolicy` — see `docs/security/policy-engine.md`). Approval runtime: IMPLEMENTED as an in-memory `ApprovalEngine` (see `docs/security/approval-engine.md`). Agent runtime with execution: IMPLEMENTED (see `docs/architecture/runtime.md`). Authentication / user management, secret handling implementation, and a unified audit query layer: NOT IMPLEMENTED.
 
 ## Principle
 
@@ -88,7 +88,7 @@ Secret handling implementation is NOT IMPLEMENTED. The rule still applies to all
 
 ## Audit
 
-Designed audit record (not implemented): who requested, which policy decision, which permission, whether approval existed, tool id, capability, timestamp, result, and related `evidence_id` or denial reason.
+Designed audit record (partially implemented): who requested, which policy decision, which permission, whether approval existed, tool id, capability, timestamp, result, and related `evidence_id` or denial reason. The agent runtime now emits these as append-only `RunRecordEntry` snapshots consumed by the persistence recorder (migration `002_agent_runtime.sql`); a human-friendly audit query UI is NOT IMPLEMENTED.
 
 ## Forbidden
 
