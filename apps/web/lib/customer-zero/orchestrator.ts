@@ -1,12 +1,12 @@
-import { detectCommercialIntent } from "./commercial-intent";
-import type { CommercialIntentResult } from "./commercial-intent";
-import { createLead } from "./persistence/lead-repository";
-import { recordLeadEventWithClient } from "./persistence/lead-events";
+import { detectCommercialIntent } from "./commercial-intent.ts";
+import type { CommercialIntentResult } from "./commercial-intent.ts";
+import { createLead } from "./persistence/lead-repository.ts";
+import { recordLeadEventWithClient } from "./persistence/lead-events.ts";
 import {
   createQualificationWithClient,
   type QualificationConfidence,
-} from "./persistence/qualification-repository";
-import type { LeadIntent } from "./lead-types";
+} from "./persistence/qualification-repository.ts";
+import type { LeadIntent } from "./lead-types.ts";
 
 export interface OrchestratorMessage {
   role: "user" | "assistant";
@@ -16,6 +16,8 @@ export interface OrchestratorMessage {
 export interface CustomerZeroInput {
   conversationId: string;
   messages: OrchestratorMessage[];
+  /** Optional correlation to the user message that triggered this flow. */
+  messageId?: string;
 }
 
 export interface CustomerZeroResult {
@@ -25,6 +27,24 @@ export interface CustomerZeroResult {
   /** True when a qualification record was persisted for a QUALIFIED lead. */
   qualificationPersisted?: boolean;
   qualificationId?: string;
+}
+
+/**
+ * Injectable dependencies (defaults = production). Tests inject fakes to
+ * verify event integrity without a database.
+ */
+export interface OrchestratorDeps {
+  createLead: typeof createLead;
+  createQualification: typeof createQualificationWithClient;
+  recordLeadEvent: typeof recordLeadEventWithClient;
+}
+
+export function defaultOrchestratorDeps(): OrchestratorDeps {
+  return {
+    createLead,
+    createQualification: createQualificationWithClient,
+    recordLeadEvent: recordLeadEventWithClient,
+  };
 }
 
 function mapIntentToLeadIntent(
@@ -57,6 +77,7 @@ function qualificationConfidence(intent: CommercialIntentResult): QualificationC
 
 export async function runCustomerZeroOrchestrator(
   input: CustomerZeroInput,
+  deps: OrchestratorDeps = defaultOrchestratorDeps(),
 ): Promise<CustomerZeroResult> {
   const intent = detectCommercialIntent(input.messages);
 
@@ -69,8 +90,11 @@ export async function runCustomerZeroOrchestrator(
 
   const leadIntent = mapIntentToLeadIntent(intent);
 
-  const lead = await createLead({
+  // createLead records lead_created exactly once and returns its event_id
+  // for traceability. No second lead_created event is produced here.
+  const lead = await deps.createLead({
     conversationId: input.conversationId,
+    messageId: input.messageId,
     status:
       intent.level === "HIGH_COMMERCIAL_INTENT"
         ? "QUALIFIED"
@@ -84,9 +108,10 @@ export async function runCustomerZeroOrchestrator(
     },
   });
 
-  // Append-only events (non-fatal): they record what already happened.
-  await recordLeadEventWithClient({
+  // Append-only event (non-fatal): records that intent was detected.
+  await deps.recordLeadEvent({
     conversationId: input.conversationId,
+    messageId: input.messageId,
     eventType: "assistant_commercial_intent_detected",
     source: "ai_assistant",
     origin: "live_assistant",
@@ -97,18 +122,9 @@ export async function runCustomerZeroOrchestrator(
     },
   });
 
-  // The lead_created event is the originating trace for qualification.
-  const leadCreatedEventId = await recordLeadEventWithClient({
-    leadId: lead.leadId,
-    conversationId: input.conversationId,
-    eventType: "lead_created",
-    source: "ai_assistant",
-    origin: "live_assistant",
-    metadata: {
-      intent: leadIntent,
-      commercialIntentLevel: intent.level,
-    },
-  });
+  // The lead_created event (recorded inside createLead) is the originating
+  // trace for the qualification record.
+  const leadCreatedEventId = lead.leadCreatedEventId;
 
   if (lead.status !== "QUALIFIED") {
     return {
@@ -123,11 +139,15 @@ export async function runCustomerZeroOrchestrator(
   // The lead_qualifications table requires at least one supporting event id;
   // without the lead_created event id we cannot produce a compliant record
   // and must not invent one — so the qualification is skipped and logged.
+  //
+  // Integrity rule: lead_qualified is ONLY recorded when the qualification
+  // record actually persisted. A persistence failure yields
+  // qualificationPersisted:false and produces NO lead_qualified event.
   let qualificationPersisted = false;
   let qualificationId: string | undefined;
   if (leadCreatedEventId) {
     try {
-      const persisted = await createQualificationWithClient({
+      const persisted = await deps.createQualification({
         leadId: lead.leadId,
         score: qualificationScore(intent),
         confidence: qualificationConfidence(intent),
@@ -144,6 +164,20 @@ export async function runCustomerZeroOrchestrator(
       });
       qualificationPersisted = true;
       qualificationId = persisted.qualificationId;
+      await deps.recordLeadEvent({
+        leadId: lead.leadId,
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        eventType: "lead_qualified",
+        source: "ai_assistant",
+        origin: "live_assistant",
+        metadata: {
+          qualifiedBy: "customer_zero_orchestrator",
+          commercialIntentLevel: intent.level,
+          commercialIntentScore: intent.score,
+          qualificationId,
+        },
+      });
     } catch (error) {
       console.error(
         "[customer-zero] qualification persistence failed",
@@ -155,21 +189,6 @@ export async function runCustomerZeroOrchestrator(
       "[customer-zero] qualification skipped: lead_created event id unavailable",
     );
   }
-
-  await recordLeadEventWithClient({
-    leadId: lead.leadId,
-    conversationId: input.conversationId,
-    eventType: "lead_qualified",
-    source: "ai_assistant",
-    origin: "live_assistant",
-    metadata: {
-      qualifiedBy: "customer_zero_orchestrator",
-      commercialIntentLevel: intent.level,
-      commercialIntentScore: intent.score,
-      qualificationPersisted,
-      qualificationId: qualificationId ?? null,
-    },
-  });
 
   return {
     intent,

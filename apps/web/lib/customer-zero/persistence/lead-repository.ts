@@ -35,7 +35,7 @@ export async function createLead(
   input: CreateLeadInput,
 ): Promise<PersistedLead> {
   // Lazy client: keeps this module loadable without DATABASE_URL (tests).
-  const { sql } = await import("../../db/client");
+  const { sql } = await import("../../db/client.ts");
   const rows = await sql`
     INSERT INTO leads (
       conversation_id,
