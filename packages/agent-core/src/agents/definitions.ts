@@ -77,7 +77,7 @@ export const RESEARCH_INTELLIGENCE: AgentDefinition = {
   capabilities: ["RESEARCH", "WEB_RESEARCH", "EVIDENCE_COLLECTION"],
   allowedTools: ["browser", "http"],
   prohibitedTools: ["filesystem", "terminal", "mcp"],
-  allowedPermissions: ["WEB_SEARCH", "WEB_READ", "WEB_NAVIGATE"],
+  allowedPermissions: ["WEB_SEARCH", "WEB_READ", "WEB_NAVIGATE", "API_REQUEST"],
   prohibitedPermissions: [
     "WEB_CLICK",
     "WEB_TYPE",

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-agent-core-copy.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -12,6 +13,7 @@
     "seo:scan": "node scripts/seo-scan.ts"
   },
   "dependencies": {
+    "@aivaultsai/agent-core": "file:../../packages/agent-core",
     "@neondatabase/serverless": "^1.1.0",
     "next": "16.3.1",
     "postgres": "^3.4.9",

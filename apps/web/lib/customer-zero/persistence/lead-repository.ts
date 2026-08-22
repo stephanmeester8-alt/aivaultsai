@@ -1,9 +1,10 @@
-import { sql } from "@/lib/db/client";
 import type { LeadIntent, LeadSource, LeadStatus } from "../lead-types";
-import { recordLeadEventWithClient } from "./lead-events";
+import { recordLeadEventWithClient } from "./lead-events.ts";
 
 export interface CreateLeadInput {
   conversationId?: string;
+  /** Optional correlation to the message that produced the lead. */
+  messageId?: string;
   status: LeadStatus;
   source: LeadSource;
   intent: LeadIntent;
@@ -26,11 +27,15 @@ export interface PersistedLead {
   status: LeadStatus;
   source: LeadSource;
   intent: LeadIntent;
+  /** event_id of the lead_created event (null when the event write failed). */
+  leadCreatedEventId: string | null;
 }
 
 export async function createLead(
   input: CreateLeadInput,
 ): Promise<PersistedLead> {
+  // Lazy client: keeps this module loadable without DATABASE_URL (tests).
+  const { sql } = await import("../../db/client");
   const rows = await sql`
     INSERT INTO leads (
       conversation_id,
@@ -81,10 +86,12 @@ export async function createLead(
   }
 
   // Append-only event: lead_created records what already happened.
-  // Non-fatal: a failed event write must not break lead creation.
-  await recordLeadEventWithClient({
+  // Non-fatal: a failed event write must not break lead creation. The
+  // event_id is returned for traceability (e.g. qualification support).
+  const leadCreatedEventId = await recordLeadEventWithClient({
     leadId: lead.lead_id,
     conversationId: lead.conversation_id ?? undefined,
+    messageId: input.messageId,
     eventType: "lead_created",
     source: input.source,
     origin: input.source === "ai_assistant" ? "live_assistant" : "manual",
@@ -97,5 +104,6 @@ export async function createLead(
     status: lead.status,
     source: lead.source,
     intent: lead.intent,
+    leadCreatedEventId,
   };
 }

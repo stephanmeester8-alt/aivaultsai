@@ -1,6 +1,6 @@
 {
   "name": "@aivaultsai/agent-core",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Typed domain contracts and in-memory agent registry for AIVaultsAI",
@@ -8,10 +8,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "node --test ./test/agent-core.test.ts ./test/policy-engine.test.ts ./test/task-engine.test.ts ./test/handoff-engine.test.ts ./test/evidence-store.test.ts ./test/approval-engine.test.ts ./test/orchestrator.test.ts ./test/execution-gate.test.ts",
+    "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc --noEmit --pretty false"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
   }
 }

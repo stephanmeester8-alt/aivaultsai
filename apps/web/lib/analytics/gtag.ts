@@ -167,8 +167,12 @@ export async function fireFunnelAnalytics(
       conversation_id: conversationHash,
       lead_id: leadHash,
     });
-    // Matches the orchestrator rule: QUALIFIED iff HIGH_COMMERCIAL_INTENT.
-    if (result.intent.level === "HIGH_COMMERCIAL_INTENT") {
+    // Matches the business rule: qualified only when the qualification
+    // record actually persisted (lead_qualified event integrity).
+    if (
+      result.intent.level === "HIGH_COMMERCIAL_INTENT" &&
+      result.qualificationPersisted === true
+    ) {
       await sendServerEvent("lead_qualified", {
         conversation_id: conversationHash,
         lead_id: leadHash,

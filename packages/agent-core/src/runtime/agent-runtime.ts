@@ -204,9 +204,29 @@ export class AgentRuntime {
       });
     }
     for (const evidenceId of next.evidenceIds) {
-      this.#record(runId, "COMPLETED", "evidence recorded", next, "evidence", { evidenceId });
+      this.#record(runId, "COMPLETED", "evidence recorded", next, "evidence", {
+        evidenceId,
+        ...this.#evidenceSummary(evidenceId),
+      });
     }
     return cloneRun(next);
+  }
+
+  /** Resolve the evidence details from the store for the recorder. */
+  #evidenceSummary(evidenceId: string): Record<string, unknown> {
+    try {
+      const evidence = this.#deps.evidence.getEvidence(evidenceId);
+      return {
+        claim: evidence.claim,
+        type: evidence.type,
+        confidence: evidence.confidence,
+        source: evidence.source,
+        provenance: evidence.provenance,
+      };
+    } catch {
+      // Evidence not found in-store: record at least the id.
+      return {};
+    }
   }
 
   /** Register a structured handoff after a completed run. */

@@ -160,7 +160,7 @@ async function createConversation(
     VALUES (
       'ai_assistant',
       ${sessionId},
-      ${JSON.stringify(attribution)}::jsonb
+      ${sql.json(attribution)}::jsonb
     )
     RETURNING conversation_id
   `;
@@ -354,7 +354,7 @@ export async function POST(request: Request) {
 
     const nextSequence = Number(sequenceResult[0].next_sequence);
 
-    await sql`
+    const insertedMessage = await sql`
       INSERT INTO conversation_messages (
         conversation_id,
         role,
@@ -367,12 +367,15 @@ export async function POST(request: Request) {
         ${message},
         ${nextSequence}
       )
+      RETURNING message_id
     `;
+    const userMessageId = insertedMessage[0]?.message_id ?? null;
 
     if (nextSequence === 1) {
       await sql`
         INSERT INTO lead_events (
           conversation_id,
+          message_id,
           event_type,
           source,
           origin,
@@ -380,10 +383,11 @@ export async function POST(request: Request) {
         )
         VALUES (
           ${resolvedConversationId}::uuid,
+          ${userMessageId}::uuid,
           'assistant_conversation_started',
           'ai_assistant',
           'live_assistant',
-          ${JSON.stringify({
+          ${sql.json({
             conversationId: resolvedConversationId,
           })}::jsonb
         )
@@ -523,6 +527,7 @@ export async function POST(request: Request) {
       {
         conversationId: resolvedConversationId,
         messages: [...history, { role: "user", content: message }],
+        messageId: userMessageId ?? undefined,
       },
       createDefaultFunnelDeps(),
     );
