@@ -1,8 +1,8 @@
 # Specialist agents
 
-**Status:** DESIGNED. No agent runtime is implemented.
+**Status:** Definitions: DESIGNED. Registry: IMPLEMENTED (in-memory `AgentRegistry` in `packages/agent-core`). Agent runtime: IMPLEMENTED (see `docs/architecture/runtime.md`) — drives tasks, policy, approvals, execution, evidence and handoffs through the existing engines. Model invocation / autonomous LLM reasoning: NOT IMPLEMENTED (agents do not call models; the runtime executes authorized tool actions).
 
-These records are definitions only. They do not imply that the agents can run, call tools, or produce live results.
+These records are definitions. The runtime executes only explicitly registered, enabled, policy-allowed, approved actions.
 
 ## Roster
 
@@ -38,7 +38,7 @@ Every agent must eventually conform to `agents/contracts/agent-definition.md`.
 
 | Capability | Status |
 |---|---|
-| Markdown definitions | DESIGNED (this directory) |
-| Agent registry runtime | NOT IMPLEMENTED |
-| Model invocation | NOT IMPLEMENTED |
-| Tool access | NOT IMPLEMENTED |
+| Markdown definitions | DESIGNED (this directory; mirrored as typed constants in `packages/agent-core`) |
+| Agent registry runtime | IMPLEMENTED (`AgentRegistry` in `packages/agent-core`) |
+| Agent runtime (task → policy → approval → execution → evidence → handoff) | IMPLEMENTED (see `docs/architecture/runtime.md`) |
+| Model invocation / autonomous reasoning | NOT IMPLEMENTED |

@@ -9,6 +9,8 @@ export type AgentDefinition = {
   readonly name: string;
   readonly role: string;
   readonly mission: string;
+  /** Short human-readable summary (contract: description). */
+  readonly description: string;
   readonly status: AgentStatus;
   readonly capabilities: readonly AgentCapability[];
   readonly allowedTools: readonly ToolId[];
@@ -17,4 +19,8 @@ export type AgentDefinition = {
   readonly prohibitedPermissions: readonly Permission[];
   readonly handoffTargets: readonly AgentId[];
   readonly riskLevel: RiskLevel;
+  /** Expected task input shape (contract: input_schema). Advisory. */
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  /** Expected output shape (contract: output_schema). Advisory. */
+  readonly outputSchema: Readonly<Record<string, unknown>>;
 };

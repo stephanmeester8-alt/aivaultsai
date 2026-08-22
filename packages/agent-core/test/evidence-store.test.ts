@@ -18,14 +18,6 @@ function baseEvidence(overrides: Partial<Evidence> = {}): Evidence {
     supportingData: "Pricing page heading: Starter",
     counterEvidence: null,
     confidence: "MEDIUM",
-    provenance: {
-      actor: "research_intelligence",
-      toolId: null,
-      capability: null,
-      method: "manual_review",
-      origin: "agent_research",
-      executionOccurred: false,
-    },
     collectedAt: "2026-08-16T00:00:00.000Z",
     taskId: "task_001",
     agentId: "research_intelligence",
@@ -230,7 +222,11 @@ test("listByConfidence works", () => {
 test("returned evidence cannot mutate internal state", () => {
   const store = createEvidenceStore();
   store.createEvidence(baseEvidence());
-  const copy = store.getEvidence("ev_001");
+  const copy = store.getEvidence("ev_001") as unknown as {
+    claim: string;
+    type: string;
+    provenance: { method: string };
+  };
   copy.claim = "mutated";
   copy.type = "FACT";
   copy.provenance.method = "hacked";

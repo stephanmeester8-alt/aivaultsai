@@ -1,6 +1,6 @@
 # Tool architecture
 
-**Status:** DESIGNED. Tool runtime: NOT IMPLEMENTED. Browser Use: NOT INSTALLED.
+**Status:** Registry and catalog IMPLEMENTED in `packages/agent-core`. Adapters: `FilesystemAdapter` (root-scoped, read-only unless explicitly enabled) and `HttpAdapter` (read-only GET with SSRF protection) execute behind the Execution Gate. Browser / terminal / MCP adapters: NOT IMPLEMENTED (explicitly unavailable). Browser Use: NOT INSTALLED.
 
 ## Purpose
 

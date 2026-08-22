@@ -6,6 +6,8 @@ export const TASK_ENGINE_ERROR_CODES = [
   "INVALID_TRANSITION",
   "TASK_NOT_ASSIGNABLE",
   "TASK_ALREADY_EXISTS",
+  "TASK_VALIDATION_FAILED",
+  "EVIDENCE_REQUIRED",
 ] as const;
 
 export type TaskEngineErrorCode = (typeof TASK_ENGINE_ERROR_CODES)[number];

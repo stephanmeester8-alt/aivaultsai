@@ -28,7 +28,7 @@ function baseTask(overrides: Partial<Task> = {}): Task {
     objective: "Verify public claims before product work",
     createdBy: "human",
     assignedTo: "research_intelligence",
-    priority: "MEDIUM",
+    priority: 3,
     status: "READY",
     riskLevel: "LOW",
     inputs: {},
@@ -306,10 +306,14 @@ test("handoff does not execute tools", () => {
 test("returned handoff cannot mutate internal state", () => {
   const { handoffs } = setup();
   handoffs.createHandoff(baseHandoff());
-  const copy = handoffs.getHandoff("handoff_001");
+  const copy = handoffs.getHandoff("handoff_001") as unknown as {
+    objective: string;
+    findings: string[];
+    evidenceIds: string[];
+  };
   copy.objective = "mutated";
-  (copy.findings as string[]).push("injected");
-  (copy.evidenceIds as string[]).splice(0, 1);
+  copy.findings.push("injected");
+  copy.evidenceIds.splice(0, 1);
   const stored = handoffs.getHandoff("handoff_001");
   assert.equal(stored.objective, "Turn verified findings into product requirements");
   assert.deepEqual(stored.findings, ["Vendor pricing pages are incomplete"]);

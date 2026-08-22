@@ -18,8 +18,12 @@ export interface AvailabilitySlot {
 }
 
 export interface AvailabilityResult {
+  /** False when no real calendar provider is connected. */
+  available: boolean;
   slots: AvailabilitySlot[];
   provider: string;
+  /** Human-readable reason when unavailable. */
+  reason?: string;
 }
 
 export interface CreateAppointmentRequest {

@@ -1,6 +1,6 @@
 # Orchestration lifecycle
 
-**Status:** DESIGNED. Runtime: NOT IMPLEMENTED.
+**Status:** Lifecycle IMPLEMENTED (in-memory) by `AgentRuntime` in `packages/agent-core` (see `docs/architecture/runtime.md`) up to and including execution, evidence, handoff and completion. Automatic classification, task queue/scheduler, agent LLM runtime, approval UI and persistence of engine state: NOT IMPLEMENTED.
 
 ## Purpose
 

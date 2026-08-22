@@ -20,8 +20,14 @@ export type ToolDefinition = {
   readonly name: string;
   readonly category: ToolCategory;
   readonly description: string;
+  /** Permission-gated operations this tool can perform (contract: capabilities). */
+  readonly capabilities: readonly string[];
   readonly riskLevel: RiskLevel;
   readonly requiredPermissions: readonly Permission[];
+  /** Invocation input shape (contract: input_schema). Advisory, not schema-validated. */
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  /** Result shape (contract: output_schema). Advisory, not schema-validated. */
+  readonly outputSchema: Readonly<Record<string, unknown>>;
   readonly enabled: boolean;
 };
 

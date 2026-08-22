@@ -1,6 +1,6 @@
 # Agent system architecture
 
-**Status:** DESIGNED. Runtime: NOT IMPLEMENTED.
+**Status:** DESIGNED at the system level; core engines and the runtime IMPLEMENTED in `packages/agent-core` (in-memory, deterministic). Autonomous model-driven agents: NOT IMPLEMENTED.
 
 ## Purpose
 
@@ -46,14 +46,17 @@ AIVAULTSAI
 
 | Component | Responsibility | Status |
 |---|---|---|
-| Agent Orchestrator | Classify tasks, assign agents, sequence steps, require approval when needed | IMPLEMENTED (coordination only; stops at READY_FOR_EXECUTION) |
+| Agent Orchestrator | Classify tasks, assign agents, sequence steps, require approval when needed | IMPLEMENTED (coordination + execution; stops at `READY_FOR_EXECUTION` until `execute()` is called) |
 | Agent Registry | Store `AgentDefinition` records and resolve agents by `id` | IMPLEMENTED (in-memory, `packages/agent-core`) |
-| Task Engine | Create and transition `Task` records | IMPLEMENTED (in-memory, `packages/agent-core`) |
+| Task Engine | Create and transition `Task` records; full lifecycle (schedule/execute/complete/fail/retry/validate) | IMPLEMENTED (in-memory, `packages/agent-core`) |
 | Handoff System | Transfer structured work between agents | IMPLEMENTED (in-memory, `packages/agent-core`) |
-| Evidence System | Record claims, sources, confidence, and provenance | IMPLEMENTED (in-memory, `packages/agent-core`) |
+| Evidence System | Record claims, sources, confidence, and provenance | IMPLEMENTED (in-memory, `packages/agent-core`; real execution evidence allowed) |
 | Policy / Permission Engine | Authorize tool invocations by agent, tool, capability, and risk | IMPLEMENTED (decision only, `evaluatePolicy`) |
 | Tool Registry | Store `ToolDefinition` records; tools execute, agents do not | IMPLEMENTED (in-memory catalog; all default tools disabled) |
-| Specialist Agents | Reason, plan, and delegate within their contract | DESIGNED |
+| Execution Gate + Tool Adapters | Enforce ALLOW + approval + enabled + adapter + valid input; run adapters | IMPLEMENTED (filesystem + read-only http adapters; browser/terminal/mcp explicitly unavailable) |
+| Agent Runtime | Drive the full lifecycle: receive → plan → policy → approval → execute → evidence → handoff | IMPLEMENTED (in-memory, `packages/agent-core`, `src/runtime`) |
+| Persistence recorder | Append-only audit of runs, tasks, approvals, executions, evidence, handoffs | IMPLEMENTED (Postgres migration `002_agent_runtime.sql` + `PostgresRunRecorder` in `apps/web`) |
+| Specialist Agents | Reason, plan, and delegate within their contract | DESIGNED (no autonomous LLM runtime) |
 
 ## Hard boundaries
 
@@ -83,9 +86,9 @@ Executable TypeScript ids are snake_case (`cto_architect`, `research_intelligenc
 
 ## Typed domain contracts (Task 2)
 
-`packages/agent-core` implements the first executable contracts: types, five agent definitions, an in-memory `AgentRegistry`, conceptual `ToolDefinition` records, and declarative permission boundaries.
+`packages/agent-core` implements the first executable contracts: types, five agent definitions, an in-memory `AgentRegistry`, conceptual `ToolDefinition` records, declarative permission boundaries, and — since TASK 22 — an executable Agent Runtime (see `docs/architecture/runtime.md`).
 
-That package does not execute tools, install Browser Use, persist data, or run an orchestrator. Browser remains `enabled: false`. `evaluatePolicy` authorizes requests; it does not execute them. See `docs/security/policy-engine.md`.
+The package does not itself execute browser/terminal/MCP tools, install Browser Use, or embed a database. Filesystem and HTTP (read-only, SSRF-guarded) adapters execute behind the Execution Gate; all catalog tools remain `enabled: false` in production. `evaluatePolicy` authorizes requests; execution happens only through the gate. See `docs/security/policy-engine.md`.
 
 ## Contracts
 

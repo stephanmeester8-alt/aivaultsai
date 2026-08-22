@@ -1,6 +1,6 @@
 # Evidence Store
 
-**Status:** IMPLEMENTED as an in-memory store in `packages/agent-core`. It does not browse, execute tools, or decide whether a claim is true.
+**Status:** IMPLEMENTED as an in-memory store in `packages/agent-core`. It does not browse, execute tools, or decide whether a claim is true. Real execution evidence (`executionOccurred: true`) is accepted only with a gate `executionId`; manual execution claims are rejected.
 
 ## Evidence model
 
@@ -45,7 +45,7 @@ A source existing does not make it authoritative.
 
 Rules in this phase:
 
-- `executionOccurred` must be `false`. No tool runtime exists.
+- `executionOccurred: true` is accepted only as real execution evidence (provenance carries the gate `executionId`); without execution, execution claims cannot be `FACT` / `INDEPENDENTLY_VERIFIED`.
 - `origin: browser` and `toolId: browser` are rejected. Browser Use is not installed; browser provenance cannot be fabricated as execution.
 - `actor`, `method` required; `toolId` and `capability` may be null.
 
@@ -61,11 +61,11 @@ No `updateEvidence` or `deleteEvidence`. Records are append-only. Corrections ar
 
 ## Execution evidence
 
-A claim such as "Browser opened website" or "File uploaded" cannot be stored as `FACT` or `INDEPENDENTLY_VERIFIED` without execution. It may be stored as `HYPOTHESIS` / `INFERENCE` / `ASSUMPTION` with `executionOccurred: false`.
+A claim such as "Browser opened website" or "File uploaded" cannot be stored as `FACT` or `INDEPENDENTLY_VERIFIED` without execution. It may be stored as `HYPOTHESIS` / `INFERENCE` / `ASSUMPTION` with `executionOccurred: false`. When a tool actually ran through the Execution Gate, the runtime records real execution evidence (`FACT`, `executionOccurred: true`, provenance `executionId`).
 
 ## Limitations
 
-- In-memory only; process restart loses records
+- In-memory only; persistence is provided via the runtime recorder (migration `002_agent_runtime.sql`, `runtime_evidence`)
 - No semantic duplicate detection
 - No verification that a source URL was fetched
 - Does not prove claims true

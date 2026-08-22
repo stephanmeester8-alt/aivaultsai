@@ -89,7 +89,7 @@ test("task contract can be constructed", () => {
     objective: "Produce a scoped architecture recommendation",
     createdBy: "human",
     assignedTo: "cto_architect",
-    priority: "HIGH",
+    priority: 2,
     status: "READY",
     riskLevel: "MEDIUM",
     inputs: { topic: "agent registry" },
@@ -127,7 +127,7 @@ test("handoff references valid AgentIds", () => {
       createHandoff({
         ...handoff,
         fromAgent: "not_an_agent",
-      } as typeof handoff),
+      } as unknown as typeof handoff),
     /Invalid fromAgent/,
   );
 });

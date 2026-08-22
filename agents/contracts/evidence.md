@@ -1,6 +1,6 @@
 # Evidence
 
-**Status:** IMPLEMENTED as an in-memory `EvidenceStore` in `packages/agent-core`. No persistence. The store does not decide truth.
+**Status:** IMPLEMENTED as an in-memory `EvidenceStore` in `packages/agent-core` (see `docs/architecture/evidence-store.md`). Persistence: via the runtime recorder (migration `002_agent_runtime.sql`, table `runtime_evidence`). The store does not decide truth.
 
 Research and execution claims must be evidence-driven.
 
@@ -38,7 +38,7 @@ Evidence records what was observed or reported. It does not record what an agent
 
 `origin` and `executionOccurred` are required when storing via `EvidenceStore`. They remain optional on the TypeScript type so older fixtures still type-check.
 
-In this phase `executionOccurred` must be `false`. Browser origin is rejected because Browser Use is not installed.
+`executionOccurred: true` is accepted ONLY as real execution evidence produced by the Execution Gate (provenance carries the `executionId`); it is never accepted from manual attachment (`Orchestrator.attachEvidence` rejects it). Browser origin is rejected because Browser Use is not installed.
 
 See `docs/architecture/evidence-store.md`.
 

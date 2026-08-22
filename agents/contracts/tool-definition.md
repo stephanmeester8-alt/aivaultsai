@@ -1,6 +1,6 @@
 # ToolDefinition
 
-**Status:** DESIGNED. Tool registry and adapters: NOT IMPLEMENTED.
+**Status:** IMPLEMENTED in `packages/agent-core`: the in-memory `ToolRegistry` and the five catalog definitions (all `enabled: false`). Adapters: `FilesystemAdapter` and `HttpAdapter` (read-only, SSRF-guarded) are implemented behind the Execution Gate; browser/terminal/mcp have no adapter and are explicitly unavailable. See `docs/architecture/tool-architecture.md` and `docs/architecture/execution-gate.md`.
 
 A tool executes an action. It is not an agent.
 
