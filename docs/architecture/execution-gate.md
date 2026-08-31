@@ -11,7 +11,7 @@ AGENT → ORCHESTRATOR → POLICY ENGINE → APPROVAL WHEN REQUIRED
 → EXECUTION GATE → TOOL ADAPTER → EXTERNAL SYSTEM
 ```
 
-The last two steps do not run in this task. The Orchestrator still stops at `READY_FOR_EXECUTION` and does not call the gate automatically.
+The Orchestrator does not call the gate automatically. It reaches `READY_FOR_EXECUTION` during `start()`; an explicit `execute()` invokes the gate. Only an enabled tool with a registered adapter can reach an external system.
 
 ## Authorization requirement
 
@@ -21,15 +21,15 @@ The gate re-evaluates `evaluatePolicy()`. It does not copy Policy Engine rules.
 |---|---|
 | `DENY` | `REJECTED` |
 | `APPROVAL_REQUIRED` | `REJECTED` |
-| `ALLOW` | `NOT_IMPLEMENTED` (no adapter invocation) |
+| `ALLOW` | `NOT_IMPLEMENTED` without an adapter; otherwise the adapter's `SUCCEEDED` or `FAILED` result |
 
 A supplied `authorization: null` is treated as missing authorization → `REJECTED`. A forged `ALLOW` that does not match a fresh `evaluatePolicy` result is `REJECTED`. Disabled tools are rejected even if a caller forges `ALLOW`.
 
 ## Adapter abstraction
 
-`ToolAdapter` is a future `execute(request)` seam.
+`ToolAdapter` exposes the `execute(request)` seam.
 
-`ToolAdapterRegistry` can register/get/has adapters. **No adapters are registered**, including Browser Use and Hermes. The gate never calls `adapter.execute()` in this phase.
+`ToolAdapterRegistry` can register/get/has adapters. The default catalog has no enabled adapters; application integration may explicitly enable and register a constrained adapter. Browser Use and Hermes have no adapters. The gate calls `adapter.execute()` only after all checks succeed.
 
 ## Tool registry relationship
 
@@ -41,7 +41,7 @@ Approvals stay task-scoped, action-scoped, and risk-scoped. Wrong task, wrong ac
 
 ## Evidence relationship
 
-`executionOccurred` is always `false`. The gate does not write evidence. Successful execution evidence is forbidden until a real adapter exists.
+`executionOccurred` is `false` unless an adapter actually runs. The gate does not write evidence; the orchestrator records execution evidence only from a real gate result.
 
 ## Default deny
 
@@ -57,4 +57,4 @@ Hermes may later connect through this gate. It is not integrated.
 
 ## Current NOT_IMPLEMENTED behavior
 
-After all checks pass, the gate returns `NOT_IMPLEMENTED` with `executionOccurred: false`. That means authorized, not executed.
+After all checks pass but no adapter is registered, the gate returns `NOT_IMPLEMENTED` with `executionOccurred: false`. That means authorized, not executed.
