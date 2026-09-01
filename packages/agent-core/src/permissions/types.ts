@@ -11,6 +11,7 @@ export const PERMISSIONS = [
   "TERMINAL_EXECUTE",
   "API_REQUEST",
   "MCP_EXECUTE",
+  "EMAIL_DRAFT",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

@@ -14,6 +14,8 @@
  */
 
 import type { ToolRegistryV2 } from "../tool-registry/registry.ts";
+import { executeEmailDraft } from "../tool-registry/adapters/email-draft.ts";
+import type { EmailSql } from "../email/draft-repository.ts";
 import {
   discoverProspects,
   qualifyProspect,
@@ -41,8 +43,23 @@ const EMPLOYEE_TOOL_HANDLERS: Readonly<
   employee_website_research: async (input, ctx) =>
     researchCompanyWebsite(input, ctx) as Promise<ToolResult<unknown>>,
   employee_qualify: async (input, ctx) => qualifyProspect(input, ctx) as Promise<ToolResult<unknown>>,
-  // email_draft / employee_database_read / employee_database_write: adapters volgen
-  // in latere implementatietaken (email-adapter IMP-4, db-adapter na de gate).
+  // Centrale email_draft-adapter (TASK 18): de employee-ctx.sql is de opslag.
+  email_draft: async (input, ctx) => {
+    const result = await executeEmailDraft(input, {
+      sql: ctx.sql as EmailSql,
+      tenantId: ctx.tenantId,
+      now: ctx.now,
+      log: ctx.log,
+    });
+    return {
+      ok: result.ok,
+      value: result.value,
+      error: result.error,
+      policy: { permission: "EMAIL_DRAFT", allowed: result.ok, reason: result.error },
+    } as ToolResult<unknown>;
+  },
+  // employee_database_read / employee_database_write: adapters volgen in
+  // een latere implementatietaak (na de gate).
 };
 
 export function executeEmployeeTool(
