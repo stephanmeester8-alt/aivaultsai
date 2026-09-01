@@ -13,6 +13,7 @@ export const PERMISSIONS = [
   "MCP_EXECUTE",
   "EMAIL_DRAFT",
   "EMAIL_SEND",
+  "CRM_READ",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
