@@ -94,12 +94,13 @@ test("storeToApprovalGate: APPROVED + binding → allowed; rest → DENY", async
   await store.approve(approvalId, "human@owner.nl");
   assert.deepEqual(await gate.check({ approvalId, requestedAction: "email_send:action_4" }), { allowed: true });
   // Binding mismatch
-  assert.equal(
-    (await gate.check({ approvalId, requestedAction: "email_send:andere" })).reason,
-    "APPROVAL_BINDING_MISMATCH",
-  );
+  const mismatch = await gate.check({ approvalId, requestedAction: "email_send:andere" });
+  assert.equal(mismatch.allowed, false);
+  if (!mismatch.allowed) assert.equal(mismatch.reason, "APPROVAL_BINDING_MISMATCH");
   // Onbekend
-  assert.equal((await gate.check({ approvalId: "apr_x", requestedAction: "a" })).reason, "APPROVAL_NOT_FOUND");
+  const unknown = await gate.check({ approvalId: "apr_x", requestedAction: "a" });
+  assert.equal(unknown.allowed, false);
+  if (!unknown.allowed) assert.equal(unknown.reason, "APPROVAL_NOT_FOUND");
 });
 
 test("storeToApprovalGate: TTL verstreken → EXPIRED", async () => {

@@ -65,12 +65,14 @@ function makeEmployeeToolHandlers(tracker?: EmployeeBudgetTracker): Readonly<
         now: ctx.now,
         log: ctx.log,
       });
-      return {
+      // Employee-zijde permission (TASK 15 §6): outreach.draft; centrale tool gebruikt EMAIL_DRAFT.
+      const toolResult: ToolResult<unknown> = {
         ok: result.ok,
         value: result.value,
         error: result.error,
-        policy: { permission: "EMAIL_DRAFT", allowed: result.ok, reason: result.error },
-      } as ToolResult<unknown>;
+        policy: { permission: "outreach.draft", allowed: result.ok, reason: result.error },
+      };
+      return toolResult;
     },
     // employee_database_read / employee_database_write: adapters volgen in
     // een latere implementatietaak (na de gate).
