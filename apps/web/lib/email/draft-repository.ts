@@ -135,3 +135,23 @@ export async function getEmailDraftStatus(
   const row = rows[0] as { status?: unknown } | undefined;
   return row?.status ? String(row.status) : null;
 }
+
+/**
+ * ActionId-lookup voor de employee send-route (IMP-8): de employee-approval
+ * bindt op `email_send:{actionId}`, de send-adapter op `email_send:{draftId}`.
+ * Deze brug vertaalt draftId → actionId via de (tenant, session, action)-rij.
+ */
+export async function getEmailDraftActionId(
+  sql: EmailSql,
+  tenantId: string,
+  draftId: string,
+): Promise<string | null> {
+  const rows = await sql`
+    SELECT action_id FROM email_drafts
+    WHERE draft_id = ${draftId}::uuid AND tenant_id = ${tenantId}::uuid
+    LIMIT 1
+  `;
+  const row = rows[0] as { action_id?: unknown } | undefined;
+  const actionId = row?.action_id;
+  return typeof actionId === "string" && actionId.length > 0 ? actionId : null;
+}

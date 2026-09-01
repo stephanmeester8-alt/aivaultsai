@@ -24,8 +24,22 @@ export interface ModelToolDefinition {
   };
 }
 
+export interface ToolRegistryV2Options {
+  /**
+   * Expliciete operator-overrides per tool-id (bv. email_send inschakelen
+   * voor een deployment). Fail-closed default blijft: zonder override is
+   * spec.enabled leidend; tenantPolicy OFF wint altijd.
+   */
+  enabledOverrides?: Readonly<Record<string, boolean>>;
+}
+
 export class ToolRegistryV2 {
   readonly #tools = new Map<string, ToolSpec>();
+  readonly #overrides: Readonly<Record<string, boolean>>;
+
+  constructor(options: ToolRegistryV2Options = {}) {
+    this.#overrides = options.enabledOverrides ?? {};
+  }
 
   register(spec: ToolSpec): void {
     assertValidToolSpec(spec);
@@ -51,15 +65,15 @@ export class ToolRegistryV2 {
   /**
    * Fail-closed: onbekende tool, disabled tool of tenantPolicy OFF → false.
    * tenantId is de TASK 25-hook (per-tenant overrides); zonder data-laag
-   * is het gedrag spec-gedreven.
+   * is het gedrag spec-gedreven + expliciete enabledOverrides.
    */
   isEnabled(id: string, tenantId?: string): boolean {
     void tenantId; // TASK 25-hook: per-tenant overrides; vandaag spec-gedreven
     const spec = this.#tools.get(id);
     if (!spec) return false;
-    if (!spec.enabled) return false;
-    if (spec.tenantPolicy === "OFF") return false;
-    return true;
+    if (spec.tenantPolicy === "OFF") return false; // OFF wint altijd
+    const enabled = this.#overrides[id] ?? spec.enabled;
+    return enabled;
   }
 
   /**
@@ -104,8 +118,11 @@ export class ToolRegistryV2 {
   }
 }
 
-export function createToolRegistryV2(specs: readonly ToolSpec[] = []): ToolRegistryV2 {
-  const registry = new ToolRegistryV2();
+export function createToolRegistryV2(
+  specs: readonly ToolSpec[] = [],
+  options: ToolRegistryV2Options = {},
+): ToolRegistryV2 {
+  const registry = new ToolRegistryV2(options);
   for (const spec of specs) {
     registry.register(spec);
   }

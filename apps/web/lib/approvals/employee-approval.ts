@@ -14,6 +14,8 @@
 
 import { createApprovalGate, type ApprovalGate, type ApprovalSnapshot } from "./approval-gate.ts";
 import type { RiskLevel } from "../tool-registry/types.ts";
+import type { EmailSql } from "../email/draft-repository.ts";
+import { getEmailDraftActionId } from "../email/draft-repository.ts";
 
 export type EmployeeApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
 
@@ -152,4 +154,50 @@ export function storeToApprovalGate(
       expiresAt: record.expiresAt,
     };
   }, now);
+}
+
+/**
+ * Employee send-route-brug (IMP-8): de employee-approval bindt op
+ * `email_send:{actionId}` (TASK 17), de send-adapter op `email_send:{draftId}`
+ * (IMP-5). Deze gate vertaalt draftId → actionId via de email_drafts-rij
+ * (tenant, session, action) en checkt dan de approval — zodat de
+ * employee-approval de IMP-5-gate passeert. Fail-closed: onbekende draft →
+ * DRAFT_NOT_FOUND, onbekende approval → APPROVAL_NOT_FOUND.
+ */
+export function createEmployeeSendApprovalGate(
+  store: EmployeeApprovalStore,
+  sql: EmailSql,
+  tenantId: string,
+  now: () => string = () => new Date().toISOString(),
+): ApprovalGate {
+  return {
+    async check(input): Promise<{ allowed: true } | { allowed: false; reason: string }> {
+      const match = /^email_send:(.+)$/.exec(input.requestedAction);
+      if (!match) {
+        return { allowed: false, reason: "APPROVAL_BINDING_MISMATCH" };
+      }
+      const draftId = match[1]!;
+      const actionId = await getEmailDraftActionId(sql, tenantId, draftId);
+      if (!actionId) {
+        return { allowed: false, reason: "DRAFT_NOT_FOUND" };
+      }
+      const record = await store.get(input.approvalId);
+      if (!record) {
+        return { allowed: false, reason: "APPROVAL_NOT_FOUND" };
+      }
+      const current = input.now ?? now();
+      if (record.expiresAt && current > record.expiresAt) {
+        return { allowed: false, reason: "APPROVAL_EXPIRED" };
+      }
+      if (record.status !== "APPROVED") {
+        const reason =
+          record.status === "REJECTED" ? "APPROVAL_REJECTED" : "APPROVAL_NOT_APPROVED";
+        return { allowed: false, reason };
+      }
+      if (record.requestedAction !== `email_send:${actionId}`) {
+        return { allowed: false, reason: "APPROVAL_BINDING_MISMATCH" };
+      }
+      return { allowed: true };
+    },
+  };
 }
