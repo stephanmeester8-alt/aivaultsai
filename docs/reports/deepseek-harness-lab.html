@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>DeepSeek Harness — Learning Lab &amp; AIVaultsAI Productieplan</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 9.8pt; color: #1a1a1a; line-height: 1.42; }
+  h1 { font-size: 15.5pt; margin: 0 0 2pt 0; }
+  h2 { font-size: 11.5pt; margin: 12pt 0 4pt 0; border-bottom: 1.5pt solid #b08d3e; padding-bottom: 2pt; }
+  h3 { font-size: 10.3pt; margin: 9pt 0 3pt 0; }
+  p { margin: 3.5pt 0; }
+  ul { margin: 3pt 0 5pt 0; padding-left: 15pt; }
+  li { margin: 1.2pt 0; }
+  code, pre { font-family: Consolas, monospace; font-size: 8.4pt; background: #f4f1e8; }
+  code { padding: 0 2.5pt; border-radius: 2pt; }
+  pre { padding: 5pt 7pt; border: 0.75pt solid #ddd; border-radius: 3pt; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 5pt 0; font-size: 8.8pt; }
+  th, td { border: 0.75pt solid #ccc; padding: 2.5pt 5pt; text-align: left; vertical-align: top; }
+  th { background: #f0ead9; }
+  .meta { color: #666; font-size: 8.8pt; margin-bottom: 8pt; }
+  .warn { color: #a00; font-weight: 600; }
+  .ok { color: #1d7a34; font-weight: 600; }
+  .box { border: 1pt solid #ddd; border-left: 3pt solid #b08d3e; padding: 5pt 9pt; margin: 7pt 0; background: #faf8f2; }
+</style>
+</head>
+<body>
+
+<h1>DeepSeek Harness — Learning Lab &amp; AIVaultsAI Productieplan</h1>
+<p class="meta">Analyse van gedeelde ChatGPT-conversatie 6a9637c7 &middot; "Onderzoek naar DeepSeek" &middot; GPT-5.6 &middot; 189 berichten (29 user / 84 assistant / 40 tool / 36 system) &middot; 19&ndash;31 augustus 2026 &middot; Opgeslagen 1 september 2026</p>
+
+<div class="box"><strong>Kern.</strong> De chat documenteert de lokale installatie en het gebruik van <strong>DeepSeek Harness</strong> (<code>C:\deepseek-lab</code>, web-UI op <code>http://127.0.0.1:3080</code>), inclusief diagnose van een vastlopende <code>npx</code>-start, API-key-configuratie met <span class="warn">een gelekt credential</span>, praktijktests van de agent-loop en sandbox, een architectuurverkenning ("everything is a plugin", Cordis) en een <strong>taak-voor-taak productieplan</strong> voor AIVaultsAI met gegenereerde prompts (Taak 1&ndash;3, waaronder een SEO/GEO-agentontwerp).</div>
+
+<h2>1. Installatie- en opstartstatus</h2>
+<table>
+  <tr><th>Onderdeel</th><th>Waarde</th></tr>
+  <tr><td>Workspace-root</td><td><code>C:\deepseek-lab</code> (minimaal: package.json 66 B, package-lock 317 KB, node_modules ~483 packages)</td></tr>
+  <tr><td>Pakket</td><td><code>@deepseek-ai/dsh@0.1.0-rc.7</code> (npm <code>latest</code>; <code>next</code> = rc.8; 451 packages bij installatie)</td></tr>
+  <tr><td>Web-interface</td><td><code>http://127.0.0.1:3080</code> &middot; Workspace <code>deepseek-lab</code> &middot; Standard mode &middot; Workspace Write</td></tr>
+  <tr><td>CLI</td><td><code>dsh web</code> = alias voor <code>--profile web</code>; <code>--dump-default-config</code> toont de plugin-tree zonder boot</td></tr>
+</table>
+<p><strong>Opnieuw starten:</strong></p>
+<pre>cd C:\deepseek-lab
+npx @deepseek-ai/dsh web        # open daarna http://127.0.0.1:3080
+# fallback bij npx-problemen:
+.\node_modules\.bin\dsh.cmd web</pre>
+<p><strong>Bekende npx-diagnose:</strong> proces <code>node → npx-cli.js @deepseek-ai/dsh web</code> (PID 33556) draaide zonder TCP-listener op 3080 en zonder child-processen &rarr; npx hing v&oacute;&oacute;r de harness-boot. Oplossing: expliciete <code>npm install @deepseek-ai/dsh@latest</code> en daarna <code>npx dsh</code>.</p>
+
+<h2>2. API-key &amp; security <span class="warn">(actie vereist)</span></h2>
+<ul>
+  <li>Correcte key-aanmaak op <strong>https://platform.deepseek.com</strong> (API Keys); geen OpenAI/Gemini-key. €2 tegoed was voldoende voor tests.</li>
+  <li class="warn">Een volledige DeepSeek API-key is tijdens het plakken van een trajectory in de chat terechtgekomen &rarr; behandelen als gecompromitteerd: revoke op platform.deepseek.com, nieuwe key aanmaken, instellen via Settings &rarr; Models &rarr; DeepSeek, testzin: "DeepSeek Harness API connection is working." Key nooit in chat/logs plaatsen.</li>
+  <li><strong>Security-observatie:</strong> de agent kon <code>C:\Users\Startklaar\.dsh\.credentials.yaml</code> lokaliseren en lezen &mdash; de read-tool kan secrets aan het model blootstellen (boundary: credential file &rarr; filesystem tool &rarr; model context).</li>
+  <li><strong>Empirische sandbox-test:</strong> write buiten de workspace geblokkeerd onder workspace-write (<code>svgWriteError: file access denied</code>); geen escalatie, bestand niet aangemaakt &rarr; boundary werkt.</li>
+</ul>
+
+<h2>3. Architectuur-inzichten</h2>
+<ul>
+  <li><strong>Agent = Model + Harness</strong>; "Everything is a plugin" op basis van <strong>Cordis</strong> (plugin/microkernel-framework); profielen/modi zijn plugin-composities (web, headless, tui; eigen profiel samen te stellen via <code>--patch</code>).</li>
+  <li><strong>Package-splitsing</strong>: <code>dsh-agent</code> (interface, geen loop), <code>dsh-agent-loop</code> (executieloop), <code>dsh-tools</code> (tool call &rarr; pre-execute &rarr; guards &rarr; execute &rarr; post-execute &rarr; finalize &rarr; result), <code>dsh-session</code>, <code>dsh-subagent</code>, <code>dsh-skill</code>, <code>dsh-host-*</code>, <code>dsh-llm</code>, <code>dsh-credentials-local</code>.</li>
+  <li><strong>Harness beïnvloedt prestaties</strong> (StateM-studie): DeepSeek-V4 Flash 82,7% &rarr; 88,1% door betere runtime/state/runbooks zonder modelwijziging.</li>
+</ul>
+
+<h2>4. Praktijktests</h2>
+<ul>
+  <li><strong>Debug-lab</strong>: 11/11 tests; harness lokaliseerde en fixte een bug in <code>src/string-utils.ts</code> (+ testcorrectie <code>wordCount</code>); trajectory toonde de echte agent-loop.</li>
+  <li><strong>Security-boundary-test</strong>: write-denial buiten de workspace empirisch bevestigd.</li>
+  <li><strong>Video-review</strong> van een eerste harness-sessie met verbeterpunten voor de werkwijze.</li>
+</ul>
+
+<h2>5. Productieplan AIVaultsAI</h2>
+<p>Kern: de harness inzetten als <strong>gecontroleerde junior/mid-level software engineer</strong> in een afgebakende workspace (lab of Git worktree), nooit direct op productie: eerst inspecteren &rarr; ontwerpen &rarr; &eacute;&eacute;n taak uitvoeren &rarr; testen &rarr; rapporteren.</p>
+<ul>
+  <li><strong>Rollen</strong>: codebase analyst (read-only), coding agent, QA/debugging agent (failures groeperen per root cause, fix per root cause, regressie-analyse), code reviewer (PR-review: correctness, security, auth, error handling, races, performance, DB, contracts, typing, coverage, compatibiliteit), research/intelligence.</li>
+  <li><strong>Takenlijst</strong>: T1 beveiliging/permissions &middot; T2 SEO/GEO-agent &middot; T3 commerciële intelligence &middot; T4 prospect discovery &amp; qualification &middot; T5 outreach/e-mail &middot; T6 learning/feedback loop.</li>
+  <li><strong>Prompt-kernregels</strong>: alleen huidige taak; read-only tenzij expliciet vereist; geen secrets/harness-config; niets buiten de workspace; geen packages installeren; evidence-based (repository = source of truth); expliciet <code>FACT</code>/<code>INFERENCE</code>/<code>RECOMMENDATION</code>, <code>NOT CURRENTLY IMPLEMENTED</code>, <code>NOT VERIFIED</code>; security-checklist incl. prompt injection, path traversal, unsafe subprocesses.</li>
+  <li><strong>Status uit de chat</strong>: Taak 1 (architectuur-audit) compleet; Taak 2 (assistant API security: 22/22 tests, typecheck groen) compleet; Taak 3 = SEO/GEO/AEO-agentontwerp (read-only design, cyclus ANALYZE &rarr; PLAN &rarr; RECOMMEND &rarr; REQUEST APPROVAL &rarr; IMPLEMENT &rarr; TEST &rarr; MEASURE &rarr; LEARN &rarr; REPEAT), implementatie pas later.</li>
+</ul>
+
+<h2>6. Volgende stappen</h2>
+<ol>
+  <li>API-key roteren (gecompromitteerde key intrekken).</li>
+  <li>Harness starten volgens &sect;1; controleren op <code>http://127.0.0.1:3080</code>.</li>
+  <li>Taak voor taak verder: SEO/GEO-agent (Taak 2), daarna commerciële intelligence, prospect discovery &amp; qualification, outreach, feedback-loop &mdash; aansluitend op bestaande modules (customer-zero, prospect-run, agent-runtime, booking, attribution).</li>
+  <li>Credentials nooit binnen een door de agent leesbare workspace leggen.</li>
+</ol>
+
+<p class="meta">Gegenereerd uit de gedeelde chat-payload (react-router-stream gedecodeerd). Geen secrets in dit document. Zie ook <code>docs/reports/deepseek-harness-lab.md</code> (volledige versie).</p>
+
+</body>
+</html>
