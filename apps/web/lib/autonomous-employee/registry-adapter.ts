@@ -16,6 +16,7 @@
 import type { ToolRegistryV2 } from "../tool-registry/registry.ts";
 import { executeEmailDraft } from "../tool-registry/adapters/email-draft.ts";
 import type { EmailSql } from "../email/draft-repository.ts";
+import type { EmployeeBudgetTracker } from "./budget.ts";
 import {
   discoverProspects,
   qualifyProspect,
@@ -36,37 +37,52 @@ export interface EmployeeToolExecution {
 }
 
 /** Gebonden handlers: bestaande employee-tools achter hun ToolSpec (TASK 15 §3). */
-const EMPLOYEE_TOOL_HANDLERS: Readonly<
+function makeEmployeeToolHandlers(tracker?: EmployeeBudgetTracker): Readonly<
   Record<string, (input: unknown, ctx: EmployeeToolContext) => Promise<ToolResult<unknown>>>
-> = {
-  employee_discovery: async (input, ctx) => discoverProspects(input, ctx) as Promise<ToolResult<unknown>>,
-  employee_website_research: async (input, ctx) =>
-    researchCompanyWebsite(input, ctx) as Promise<ToolResult<unknown>>,
-  employee_qualify: async (input, ctx) => qualifyProspect(input, ctx) as Promise<ToolResult<unknown>>,
-  // Centrale email_draft-adapter (TASK 18): de employee-ctx.sql is de opslag.
-  email_draft: async (input, ctx) => {
-    const result = await executeEmailDraft(input, {
-      sql: ctx.sql as EmailSql,
-      tenantId: ctx.tenantId,
-      now: ctx.now,
-      log: ctx.log,
-    });
-    return {
-      ok: result.ok,
-      value: result.value,
-      error: result.error,
-      policy: { permission: "EMAIL_DRAFT", allowed: result.ok, reason: result.error },
-    } as ToolResult<unknown>;
-  },
-  // employee_database_read / employee_database_write: adapters volgen in
-  // een latere implementatietaak (na de gate).
-};
+> {
+  return {
+    employee_discovery: async (input, ctx) => discoverProspects(input, ctx) as Promise<ToolResult<unknown>>,
+    employee_website_research: async (input, ctx) => {
+      // Netwerk-teller (TASK 16): fetch-invocaties binnen deze tool tellen mee.
+      const ctxWithNetworkCount =
+        tracker && ctx.fetchImpl
+          ? {
+              ...ctx,
+              fetchImpl: (async (fetchInput: RequestInfo | URL, init?: RequestInit) => {
+                tracker.recordNetworkRequest();
+                return ctx.fetchImpl!(fetchInput, init);
+              }) as typeof fetch,
+            }
+          : ctx;
+      return researchCompanyWebsite(input, ctxWithNetworkCount) as Promise<ToolResult<unknown>>;
+    },
+    employee_qualify: async (input, ctx) => qualifyProspect(input, ctx) as Promise<ToolResult<unknown>>,
+    // Centrale email_draft-adapter (TASK 18): de employee-ctx.sql is de opslag.
+    email_draft: async (input, ctx) => {
+      const result = await executeEmailDraft(input, {
+        sql: ctx.sql as EmailSql,
+        tenantId: ctx.tenantId,
+        now: ctx.now,
+        log: ctx.log,
+      });
+      return {
+        ok: result.ok,
+        value: result.value,
+        error: result.error,
+        policy: { permission: "EMAIL_DRAFT", allowed: result.ok, reason: result.error },
+      } as ToolResult<unknown>;
+    },
+    // employee_database_read / employee_database_write: adapters volgen in
+    // een latere implementatietaak (na de gate).
+  };
+}
 
 export function executeEmployeeTool(
   toolId: string,
   input: unknown,
   ctx: EmployeeToolContext,
   registry: ToolRegistryV2,
+  tracker?: EmployeeBudgetTracker,
 ): Promise<EmployeeToolExecution> {
   const spec = registry.get(toolId);
   if (!spec) {
@@ -90,7 +106,26 @@ export function executeEmployeeTool(
       policy: { toolId, allowed: false, reason: "NOT_IMPLEMENTED" },
     });
   }
-  const handler = EMPLOYEE_TOOL_HANDLERS[toolId];
+
+  // Budget (TASK 16): check vóór de call; budget op = STOP (fail-closed).
+  if (tracker) {
+    const check = tracker.check();
+    if (!check.ok) {
+      return Promise.resolve({
+        ok: false,
+        error: "BUDGET_EXCEEDED",
+        policy: {
+          toolId,
+          allowed: false,
+          reason: `BUDGET_EXCEEDED:${check.field}`,
+        },
+      });
+    }
+    // Elke poging telt (ook als de handler daarna DENY'd) — anti-loop.
+    tracker.recordToolCall(toolId);
+  }
+
+  const handler = makeEmployeeToolHandlers(tracker)[toolId];
   if (!handler) {
     // Bekend in de registry met adapter, maar nog niet gebonden → fail-closed.
     return Promise.resolve({
