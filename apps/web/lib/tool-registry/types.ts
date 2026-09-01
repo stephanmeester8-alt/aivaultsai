@@ -64,6 +64,8 @@ export interface ToolSpec {
   readonly auditEnabled: boolean; // WRITE/DESTRUCTIVE/EXTERNAL_SIDE_EFFECT: altijd true
   readonly timeoutMs: number; // per-tool harde timeout
   readonly rateLimit: RateLimit | null;
+  /** Zoektermen voor tool discovery (TASK 7); optioneel, bounded. */
+  readonly keywords?: readonly string[];
 }
 
 export function isToolCategory(value: unknown): value is ToolCategory {

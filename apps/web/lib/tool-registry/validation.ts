@@ -100,6 +100,16 @@ export function assertValidToolSpec(spec: ToolSpec): ToolSpec {
       fail("rateLimit.windowMs must be a positive integer");
     }
   }
+  if (spec.keywords !== undefined) {
+    if (!Array.isArray(spec.keywords) || spec.keywords.length > 20) {
+      fail("keywords must be an array of at most 20 entries");
+    }
+    for (const keyword of spec.keywords) {
+      if (typeof keyword !== "string" || keyword.trim().length === 0 || keyword.length > 40) {
+        fail("keywords must contain only non-empty strings of at most 40 characters");
+      }
+    }
+  }
 
   return spec;
 }

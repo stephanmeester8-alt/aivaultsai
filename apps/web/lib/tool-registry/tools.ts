@@ -31,6 +31,7 @@ export const ASSISTANT_WEBSITE_RESEARCH: ToolSpec = {
   auditEnabled: true,
   timeoutMs: 30_000,
   rateLimit: { max: 10, windowMs: 60_000 },
+  keywords: ["website", "research", "onderzoek", "url", "website-research"],
 };
 
 export const EMAIL_DRAFT: ToolSpec = {
@@ -73,6 +74,7 @@ export const EMAIL_DRAFT: ToolSpec = {
   auditEnabled: true,
   timeoutMs: 5_000,
   rateLimit: { max: 60, windowMs: 60_000 },
+  keywords: ["email", "draft", "concept", "outreach", "e-mail"],
 };
 
 export const EMAIL_SEND: ToolSpec = {
@@ -111,6 +113,7 @@ export const EMAIL_SEND: ToolSpec = {
   auditEnabled: true,
   timeoutMs: 15_000,
   rateLimit: { max: 20, windowMs: 3_600_000 },
+  keywords: ["email", "send", "versturen", "mail", "e-mail"],
 };
 
 export const CONTACT_SEARCH: ToolSpec = {
@@ -164,6 +167,7 @@ export const CONTACT_SEARCH: ToolSpec = {
   auditEnabled: true,
   timeoutMs: 10_000,
   rateLimit: { max: 60, windowMs: 60_000 },
+  keywords: ["crm", "contact", "zoeken", "search", "klant"],
 };
 
 export const LEAD_READ: ToolSpec = {
@@ -205,6 +209,7 @@ export const LEAD_READ: ToolSpec = {
   auditEnabled: true,
   timeoutMs: 10_000,
   rateLimit: { max: 120, windowMs: 60_000 },
+  keywords: ["crm", "lead", "lezen", "read"],
 };
 
 export const CALENDAR_READ: ToolSpec = {
@@ -258,6 +263,7 @@ export const CALENDAR_READ: ToolSpec = {
   auditEnabled: true,
   timeoutMs: 10_000,
   rateLimit: { max: 60, windowMs: 60_000 },
+  keywords: ["calendar", "agenda", "beschikbaarheid", "slots", "afspraak"],
 };
 
 /** Volledige catalogus — registratievolgorde = stabiele lijstvolgorde. */
