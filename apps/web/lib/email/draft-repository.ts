@@ -66,3 +66,72 @@ export async function upsertEmailDraft(
   }
   return { draftId: String(row.draft_id), created: false };
 }
+
+export interface ClaimedEmailDraft {
+  draftId: string;
+  to: string;
+  subject: string;
+  body: string;
+  optOutLine: string;
+}
+
+/**
+ * Idempotente claim (TASK 19 §5): DRAFT/APPROVED → SENT via conditional
+ * UPDATE = distributed lock. 0 rijen → al verstuurd/geannuleerd/niet
+ * gevonden (de caller onderscheidt via getEmailDraftStatus).
+ */
+export async function claimEmailDraft(
+  sql: EmailSql,
+  tenantId: string,
+  draftId: string,
+): Promise<ClaimedEmailDraft | null> {
+  const rows = await sql`
+    UPDATE email_drafts
+       SET status = 'SENT'
+     WHERE draft_id = ${draftId}::uuid
+       AND tenant_id = ${tenantId}::uuid
+       AND status IN ('DRAFT','APPROVED')
+    RETURNING draft_id, to_address, subject, body, opt_out_line
+  `;
+  const row = rows[0] as
+    | { draft_id?: unknown; to_address?: unknown; subject?: unknown; body?: unknown; opt_out_line?: unknown }
+    | undefined;
+  if (!row?.draft_id) return null;
+  return {
+    draftId: String(row.draft_id),
+    to: String(row.to_address),
+    subject: String(row.subject),
+    body: String(row.body),
+    optOutLine: String(row.opt_out_line),
+  };
+}
+
+/** Rollback na dispatcher-BLOCKED of provider-fout: status terug naar DRAFT. */
+export async function revertEmailDraftStatus(
+  sql: EmailSql,
+  tenantId: string,
+  draftId: string,
+): Promise<void> {
+  await sql`
+    UPDATE email_drafts
+       SET status = 'DRAFT'
+     WHERE draft_id = ${draftId}::uuid
+       AND tenant_id = ${tenantId}::uuid
+       AND status = 'SENT'
+  `;
+}
+
+/** Status-lookup voor foutonderscheid (DRAFT_NOT_FOUND vs ALREADY_SENT vs CANCELLED). */
+export async function getEmailDraftStatus(
+  sql: EmailSql,
+  tenantId: string,
+  draftId: string,
+): Promise<string | null> {
+  const rows = await sql`
+    SELECT status FROM email_drafts
+    WHERE draft_id = ${draftId}::uuid AND tenant_id = ${tenantId}::uuid
+    LIMIT 1
+  `;
+  const row = rows[0] as { status?: unknown } | undefined;
+  return row?.status ? String(row.status) : null;
+}
