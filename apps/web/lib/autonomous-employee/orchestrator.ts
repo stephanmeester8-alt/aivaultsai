@@ -44,6 +44,10 @@ import {
   qualifyProspect,
   researchCompanyWebsite,
 } from "./tools.ts";
+import {
+  createEmployeeApprovalId,
+  type EmployeeApprovalStore,
+} from "../approvals/employee-approval.ts";
 import type {
   EmployeeToolContext,
   EmployeeWorkSessionConfig,
@@ -60,6 +64,8 @@ export interface EmployeeDeps {
   lookup?: (host: string) => Promise<readonly string[]>;
   analyze?: (input: ProspectInput) => Promise<ProspectIntelligence>;
   provider?: EmailProvider;
+  /** TASK 17: approval-store (optioneel; zonder store = huidig gedrag). */
+  approvals?: EmployeeApprovalStore;
   now?: () => string;
   log?: (message: string) => void;
 }
@@ -330,6 +336,8 @@ export interface ApproveActionInput {
   optedOut?: boolean;
   warmedUp?: boolean;
   rateAllowed?: boolean;
+  /** Menselijke identiteit — verplicht wanneer een approval-store is geïnjecteerd (TASK 17). */
+  approver?: string;
 }
 
 /**
@@ -337,6 +345,10 @@ export interface ApproveActionInput {
  * the session is in WAITING_APPROVAL and the action is PENDING_APPROVAL. The
  * existing email dispatcher then applies its own fail-closed gates
  * (verified email, opt-out, warm-up, rate limit, provider presence).
+ *
+ * TASK 17: met een approval-store wordt de menselijke beslissing eerst als
+ * first-class approval vastgelegd (PENDING → APPROVED); zonder store is het
+ * gedrag identiek aan vóór de integratie (backwards compatible).
  */
 export async function approveAction(
   sessionId: string,
@@ -357,6 +369,24 @@ export async function approveAction(
   if (!action) throw new Error("OUTREACH_ACTION_NOT_FOUND");
   if (action.status !== "PENDING_APPROVAL") {
     throw new Error(`OUTREACH_ACTION_NOT_PENDING:${action.status}`);
+  }
+
+  // TASK 17: approval als first-class record (idempotente aanmaak + approve).
+  if (deps.approvals) {
+    if (!input.approver || input.approver.trim().length === 0) {
+      throw new Error("APPROVER_REQUIRED");
+    }
+    const approvalId = createEmployeeApprovalId(sessionId, actionId);
+    await deps.approvals.create({
+      sessionId,
+      actionId,
+      requestedBy: "autonomous-employee",
+      requestedAction: `email_send:${actionId}`,
+      riskLevel: "HIGH",
+      now: deps.now?.(),
+    });
+    await deps.approvals.approve(approvalId, input.approver);
+    log(`approval ${approvalId} APPROVED by ${input.approver}`);
   }
 
   // The existing dispatcher is the second gate (fail-closed).
@@ -405,6 +435,7 @@ export async function rejectAction(
   sessionId: string,
   actionId: string,
   deps: EmployeeDeps,
+  approver?: string,
 ): Promise<{ actionStatus: string }> {
   const log = deps.log ?? ((message: string) => console.info(`[employee] ${message}`));
   const session = await getWorkSession(deps.sql, sessionId);
@@ -416,6 +447,24 @@ export async function rejectAction(
   if (!action) throw new Error("OUTREACH_ACTION_NOT_FOUND");
   if (action.status !== "PENDING_APPROVAL") {
     throw new Error(`OUTREACH_ACTION_NOT_PENDING:${action.status}`);
+  }
+
+  // TASK 17: reject als first-class approval-record.
+  if (deps.approvals) {
+    if (!approver || approver.trim().length === 0) {
+      throw new Error("APPROVER_REQUIRED");
+    }
+    const approvalId = createEmployeeApprovalId(sessionId, actionId);
+    await deps.approvals.create({
+      sessionId,
+      actionId,
+      requestedBy: "autonomous-employee",
+      requestedAction: `email_send:${actionId}`,
+      riskLevel: "HIGH",
+      now: deps.now?.(),
+    });
+    await deps.approvals.reject(approvalId, approver);
+    log(`approval ${approvalId} REJECTED by ${approver}`);
   }
 
   action.status = "REJECTED";
