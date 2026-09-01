@@ -33,7 +33,7 @@ REQUEST → CREATE TASK → ASSIGN AGENT → EVALUATE POLICY
 → AUTHORIZED → READY_FOR_EXECUTION → STOP
 ```
 
-The orchestrator **stops** at `READY_FOR_EXECUTION`. It does not claim `DONE`, `SUCCESS`, `EXECUTED`, or `COMPLETED`.
+`start()` stops at `READY_FOR_EXECUTION`. An explicit `execute()` then passes the request to the Execution Gate; a successful adapter result can transition orchestration to `COMPLETED`. Authorization alone never claims execution.
 
 ## Policy integration
 
@@ -85,10 +85,11 @@ There is no `runBrowser`, `runHermes`, `runAgent`, or `callLLM`. Execution happe
 - Deterministic `Orchestrator`
 - Explicit state table
 - Wiring of Task, Policy, Approval, Handoff, Evidence
-- Stop at `READY_FOR_EXECUTION`
+- Stop at `READY_FOR_EXECUTION` during `start()`
+- Explicit `execute()` integration with the Execution Gate
 
 ## What is not implemented
 
-- Tool execution, Browser Use, Hermes, LLM, MCP
+- Browser Use, Hermes, LLM, MCP
 - Persistence, network, auth, UI, queues
 - Task `DONE` / execution runtime

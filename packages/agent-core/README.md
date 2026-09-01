@@ -2,7 +2,7 @@
 
 Typed domain contracts for the AIVaultsAI agent system.
 
-**Status:** IMPLEMENTED as TypeScript types, in-memory domain engines, a pure Policy Decision Engine, a deterministic Orchestrator that stops at READY_FOR_EXECUTION, and an Execution Gate that returns NOT_IMPLEMENTED. No agent runtime, tool execution, or Browser Use adapter is implemented.
+**Status:** IMPLEMENTED as TypeScript contracts, in-memory domain engines, a Policy Decision Engine, deterministic Orchestrator, Execution Gate, and `AgentRuntime` lifecycle driver. Tool execution is possible only through an explicitly enabled, registered adapter after policy and approval checks. The web application currently registers a bounded HTTP adapter for one server-side runtime task; Browser Use and Hermes adapters are not implemented.
 
 ## Purpose
 
@@ -21,8 +21,9 @@ It exists so later tasks can share one set of IDs, statuses, and permission name
 | Evidence | Proof/provenance of information (`EvidenceStore`). Not truth. |
 | Handoff | Structured transfer of work (`HandoffEngine`) |
 | Approval | Human authorization records (`ApprovalEngine`). Policy still decides. |
-| Orchestrator | Coordinates engines. Stops at READY_FOR_EXECUTION. Does not execute. |
-| Execution Gate | Sole future execution boundary. Always returns NOT_IMPLEMENTED in this phase. |
+| Orchestrator | Coordinates engines and invokes the Execution Gate only through explicit `execute()`. |
+| Execution Gate | Sole execution boundary; fails closed and returns `NOT_IMPLEMENTED` without an adapter. |
+| AgentRuntime | Drives submit, approval, execution, evidence, and handoff lifecycle state. |
 
 Agent definitions do not import or name Browser Use. Browser execution, if added later, must be a replaceable tool adapter behind policy.
 
@@ -126,8 +127,9 @@ Evidence
 - In-memory handoff engine (transfer records only)
 - In-memory evidence store (append-only records)
 - In-memory approval engine (human decisions only)
-- Deterministic orchestrator (coordination only)
-- Execution gate (authorization boundary; NOT_IMPLEMENTED)
+- Deterministic orchestrator with explicit execution path
+- Fail-closed execution gate and adapter registry
+- Agent runtime lifecycle driver and optional append-only run recorder
 - Conceptual tool definitions (all default `enabled: false`)
 - Declarative permission lookup
 - Pure policy decision engine
@@ -136,11 +138,10 @@ Evidence
 
 ## What is NOT implemented
 
-- Agent runtime or model invocation
-- Tool execution / Browser Use / Hermes
-- Network access
-- Database, API, UI
-- MCP, Hermes, Ollama
+- Model invocation
+- Browser Use, Hermes, and MCP adapters
+- Database, API, or UI within this package (the web app owns integration)
+- Any enabled adapter in the default tool catalog
 
 ## Tests
 
@@ -158,12 +159,10 @@ node --test ./test/agent-core.test.ts ./test/policy-engine.test.ts ./test/task-e
 
 ## Type checking
 
-This package has no `typescript` dependency (network install was not used).
-
-If `tsc` is available locally:
+TypeScript is a development dependency. Run:
 
 ```text
-npx tsc --noEmit -p tsconfig.json
+npm run typecheck
 ```
 
-Required test/type setup if a later task adds tooling: `typescript` as a devDependency only. Do not add Zod, a test framework, or Browser Use unless a later task authorizes it.
+Do not add Browser Use or other execution adapters unless a task explicitly authorizes them.

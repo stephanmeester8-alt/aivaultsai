@@ -2,15 +2,17 @@
 
 Isolated public marketing site for [AIVaultsAI](https://www.aivaultsai.one).
 
-This application is **presentation-only**. It does not import `packages/agent-core`, does not run agents, and does not call tools, Browser Use, Hermes, or any backend.
+This is the public AIVaultsAI marketing site and commercial-assistant application. Server-side routes provide assistant conversations, Customer Zero lead capture and qualification, analytics instrumentation, and a narrowly scoped Agent Runtime integration.
 
 ## Stack
 
 - Next.js (App Router)
 - TypeScript
 - Tailwind CSS
+- Postgres/Neon persistence for Customer Zero and runtime audit records
+- `@aivaultsai/agent-core` for the server-only runtime boundary
 
-No database, authentication, payments, or APIs.
+There is no public account, payment, or self-service agent-platform UI. The assistant and persistence paths are server-side; the runtime currently enables only a bounded HTTP verification task after lead creation. Browser Use, Hermes, and general-purpose tool execution are not connected.
 
 ## Develop
 
@@ -27,15 +29,13 @@ npm run lint
 npm run build
 ```
 
-## Early access CTA
+## Customer Zero
 
-The **Request Access** control is a non-functional placeholder.
-
-No contact email is configured in this repository, so the button does not use `mailto:` and does not submit a form. Document a real address here before wiring the CTA.
+The assistant funnel classifies commercial intent, creates a lead, appends lead events, and persists a traceable qualification for high-intent leads. It is designed to be non-fatal to assistant replies. The optional runtime follow-up is atomically claimed per conversation before it can execute.
 
 ## Accuracy
 
-Copy distinguishes **Built**, **In development**, and **Planned**. Tool execution, Browser Use, Hermes, and the public product platform are not claimed as live.
+Copy distinguishes **Built**, **In development**, and **Planned**. Browser Use, Hermes, and the public product platform are not claimed as live.
 
 ## Deploy to www.aivaultsai.one
 

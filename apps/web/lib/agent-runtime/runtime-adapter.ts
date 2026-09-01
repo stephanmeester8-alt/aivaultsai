@@ -31,6 +31,37 @@ import { SITE_URL } from "../site.ts";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Minimal tagged-query contract, kept injectable for idempotency tests. */
+export type RuntimeSql = (
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+) => Promise<unknown[]>;
+
+/**
+ * Atomically reserve the one runtime run permitted for a conversation.
+ *
+ * A read followed by a write is not safe here: concurrent serverless
+ * invocations can both observe an empty value and execute duplicate work.
+ * The conditional update lets Postgres serialize the claim instead.
+ */
+export async function claimConversationRuntimeRun(
+  sql: RuntimeSql,
+  conversationId: string,
+  runId: string,
+): Promise<boolean> {
+  const rows = await sql`
+    UPDATE conversations
+    SET
+      metadata = COALESCE(metadata, '{}'::jsonb)
+        || ${({ runtime_run_id: runId })}::jsonb,
+      last_activity_at = NOW()
+    WHERE conversation_id = ${conversationId}::uuid
+      AND metadata->>'runtime_run_id' IS NULL
+    RETURNING conversation_id
+  `;
+  return rows.length > 0;
+}
+
 /**
  * The HTTP tool is enabled explicitly here — the operator opt-in required by
  * the ToolDefinition contract ("nothing may execute until a task explicitly
@@ -142,21 +173,26 @@ export async function runConversationRuntimeTask(
   try {
     const { sql } = await import("../db/client");
 
-    const existing = await sql`
-      SELECT metadata->>'runtime_run_id' AS run_id
-      FROM conversations
-      WHERE conversation_id = ${conversationId}::uuid
-      LIMIT 1
-    `;
-    if (existing[0]?.run_id) {
+    const runId = `run_${conversationId}`;
+    const claimed = await claimConversationRuntimeRun(
+      sql as unknown as RuntimeSql,
+      conversationId,
+      runId,
+    );
+    if (!claimed) {
+      const existing = await sql`
+        SELECT metadata->>'runtime_run_id' AS run_id
+        FROM conversations
+        WHERE conversation_id = ${conversationId}::uuid
+        LIMIT 1
+      `;
       return {
         ran: false,
         skipped: "already_ran",
-        runId: String(existing[0].run_id),
+        ...(existing[0]?.run_id ? { runId: String(existing[0].run_id) } : {}),
       };
     }
 
-    const runId = `run_${conversationId}`;
     const request: AgentRunRequest = {
       runId,
       agentId: "research_intelligence",
@@ -193,21 +229,6 @@ export async function runConversationRuntimeTask(
       evidenceIds: [...run.evidenceIds],
       error: run.failureReason,
     };
-
-    // Persist the run id once the run reached a terminal state so the step
-    // never repeats for this conversation. The object is passed directly
-    // (no JSON.stringify) so both the neon client and postgres.js store a
-    // jsonb OBJECT, never a double-encoded jsonb string.
-    if (run.state === "COMPLETED" || run.state === "FAILED") {
-      await sql`
-        UPDATE conversations
-        SET
-          metadata = metadata
-            || ${({ runtime_run_id: runId })}::jsonb,
-          last_activity_at = NOW()
-        WHERE conversation_id = ${conversationId}::uuid
-      `;
-    }
 
     // Flush pending recorder writes (evidence/execution/run rows) before the
     // serverless function returns; otherwise they may be dropped.
