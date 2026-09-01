@@ -267,6 +267,139 @@ export const CALENDAR_READ: ToolSpec = {
   keywords: ["calendar", "agenda", "beschikbaarheid", "slots", "afspraak"],
 };
 
+// ---- CRM write (TASK 21): approval verplicht, idempotentie via dedupeKey ----
+
+const CRM_WRITE_BASE = {
+  category: "CRM" as const,
+  class: "WRITE" as const,
+  riskLevel: "MEDIUM" as const,
+  requiresApproval: true, // fail-closed default tot TASK 25 (tenant-policy)
+  enabled: true, // adapter ontbreekt → NOT_IMPLEMENTED
+  adapter: "crm-write",
+  tenantPolicy: "APPROVAL" as const,
+  auditEnabled: true,
+  timeoutMs: 10_000,
+  rateLimit: { max: 30, windowMs: 60_000 },
+};
+
+export const CONTACT_CREATE: ToolSpec = {
+  ...CRM_WRITE_BASE,
+  id: "contact_create",
+  name: "Contact Create",
+  description: "Maak een CRM-contact aan (approval verplicht, idempotent via dedupeKey).",
+  version: "1.0.0",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string", minLength: 1, maxLength: 200 },
+      email: { type: "string", minLength: 3, maxLength: 320 },
+      company: { type: "string", maxLength: 200 },
+      role: { type: "string", maxLength: 120 },
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["name", "email", "dedupeKey", "approvalId"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      contactId: { type: "string" },
+      created: { type: "boolean" },
+    },
+    required: ["contactId", "created"],
+  },
+  permissions: ["CRM_WRITE"],
+  keywords: ["crm", "contact", "create", "aanmaken"],
+};
+
+export const CONTACT_UPDATE: ToolSpec = {
+  ...CRM_WRITE_BASE,
+  id: "contact_update",
+  name: "Contact Update",
+  description: "Wijzig een CRM-contact (approval verplicht, minstens één veld, idempotent).",
+  version: "1.0.0",
+  inputSchema: {
+    type: "object",
+    properties: {
+      contactId: { type: "string", minLength: 1, maxLength: 200 },
+      name: { type: "string", minLength: 1, maxLength: 200 },
+      email: { type: "string", minLength: 3, maxLength: 320 },
+      company: { type: "string", maxLength: 200 },
+      role: { type: "string", maxLength: 120 },
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["contactId", "dedupeKey", "approvalId"],
+    anyOf: [{ required: ["name"] }, { required: ["email"] }, { required: ["company"] }, { required: ["role"] }],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: { contactId: { type: "string" } },
+    required: ["contactId"],
+  },
+  permissions: ["CRM_WRITE"],
+  keywords: ["crm", "contact", "update", "wijzigen"],
+};
+
+export const LEAD_CREATE: ToolSpec = {
+  ...CRM_WRITE_BASE,
+  id: "lead_create",
+  name: "Lead Create",
+  description: "Maak een CRM-lead aan (approval verplicht, idempotent via dedupeKey).",
+  version: "1.0.0",
+  inputSchema: {
+    type: "object",
+    properties: {
+      company: { type: "string", minLength: 1, maxLength: 200 },
+      status: { type: "string", maxLength: 60 },
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["company", "dedupeKey", "approvalId"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      leadId: { type: "string" },
+      created: { type: "boolean" },
+    },
+    required: ["leadId", "created"],
+  },
+  permissions: ["CRM_WRITE"],
+  keywords: ["crm", "lead", "create", "aanmaken"],
+};
+
+export const LEAD_UPDATE: ToolSpec = {
+  ...CRM_WRITE_BASE,
+  id: "lead_update",
+  name: "Lead Update",
+  description: "Wijzig een CRM-lead (approval verplicht, minstens één veld, idempotent).",
+  version: "1.0.0",
+  inputSchema: {
+    type: "object",
+    properties: {
+      leadId: { type: "string", minLength: 1, maxLength: 200 },
+      company: { type: "string", minLength: 1, maxLength: 200 },
+      status: { type: "string", maxLength: 60 },
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["leadId", "dedupeKey", "approvalId"],
+    anyOf: [{ required: ["company"] }, { required: ["status"] }],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: { leadId: { type: "string" } },
+    required: ["leadId"],
+  },
+  permissions: ["CRM_WRITE"],
+  keywords: ["crm", "lead", "update", "wijzigen"],
+};
+
 export const EMPLOYEE_DISCOVERY: ToolSpec = {
   id: "employee_discovery",
   name: "Employee Discovery",
@@ -460,6 +593,10 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
   EMPLOYEE_QUALIFY,
   EMPLOYEE_DATABASE_READ,
   EMPLOYEE_DATABASE_WRITE,
+  CONTACT_CREATE,
+  CONTACT_UPDATE,
+  LEAD_CREATE,
+  LEAD_UPDATE,
 ];
 
 export function createDefaultToolRegistry(): ToolRegistryV2 {

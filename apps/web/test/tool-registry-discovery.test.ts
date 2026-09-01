@@ -160,13 +160,13 @@ test("discovery: approval-vlag markeert HIGH-tools (markeer, verberg niet)", () 
 });
 
 test("discovery: limit + truncated", () => {
-  // intent "crm" matcht twee tools (contact_search + lead_read via category).
+  // intent "crm" matcht zes tools (2 read + 4 write via category/keywords).
   const unlimited = discoverTools({ intent: "crm", agentId: "x" }, DEFAULT_REGISTRY);
-  assert.equal(unlimited.tools.length, 2);
+  assert.equal(unlimited.tools.length, 6);
   const result = discoverTools({ intent: "crm", agentId: "x", limit: 1 }, DEFAULT_REGISTRY);
   assert.equal(result.tools.length, 1);
   assert.equal(result.truncated, true);
-  assert.equal(result.tools[0]!.id, "contact_search"); // id asc bij gelijke score
+  assert.equal(result.tools[0]!.id, "contact_create"); // id asc bij gelijke score
 });
 
 test("discovery: categories-scope", () => {
