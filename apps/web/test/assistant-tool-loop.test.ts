@@ -180,3 +180,20 @@ test("model call failure in a later round falls back safely", async () => {
   assert.equal(result.text, "Fallback na timeout.");
   assert.equal(result.toolRounds, 1);
 });
+
+test("tool loop logs safe debug markers without secrets", async () => {
+  const logs: string[] = [];
+  await runAssistantToolLoop({
+    history: HISTORY,
+    message: MESSAGE,
+    firstResponse: toolResponse("call-1", { url: "https://a.nl" }),
+    modelCall: async () => ({ ok: true as const, data: textResponse("Klaar.") }),
+    executeTool: async () => okResult({ status: 200, body: "x" }),
+    log: (message) => logs.push(message),
+  });
+  assert.ok(logs.some((l) => l.includes("assistant_tool_requested name=assistant_website_research")));
+  assert.ok(logs.some((l) => l.includes("tool_execution_result")));
+  assert.ok(logs.some((l) => l.includes("tool_loop_finished rounds=1")));
+  // No raw credentials/keys may ever appear in logs.
+  assert.ok(logs.every((l) => !/sk-[A-Za-z0-9]|Bearer |authorization/i.test(l)));
+});

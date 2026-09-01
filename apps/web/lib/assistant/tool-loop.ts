@@ -141,6 +141,8 @@ export interface AssistantToolLoopOptions {
   executeTool: (call: ParsedToolCall) => Promise<AssistantToolExecution>;
   maxRounds?: number;
   fallbackText?: string;
+  /** Safe debug logger (never log keys/credentials/headers). */
+  log?: (message: string) => void;
 }
 
 export interface AssistantToolLoopResult {
@@ -161,6 +163,7 @@ export async function runAssistantToolLoop(
 ): Promise<AssistantToolLoopResult> {
   const maxRounds = Math.max(1, options.maxRounds ?? MAX_ASSISTANT_TOOL_ROUNDS);
   const fallbackText = options.fallbackText ?? FALLBACK_TOOL_TEXT;
+  const log = options.log ?? ((message: string) => console.info(`[assistant-tool] ${message}`));
   const toolResults: AssistantToolLoopResult["toolResults"] = [];
 
   let responseData = options.firstResponse;
@@ -174,8 +177,12 @@ export async function runAssistantToolLoop(
 
     // One tool per round: bounded and predictable.
     const call = calls[0]!;
+    log(`assistant_tool_requested name=${call.name} call_id=${call.callId} round=${toolRounds}`);
     const result = await options.executeTool(call);
     toolResults.push({ call, result });
+    log(
+      `tool_execution_result name=${call.name} ok=${result.ok} status=${result.executionStatus ?? "n/a"} error=${result.error ?? "none"}`,
+    );
 
     const input = buildToolContinuationInput(
       options.history,
@@ -185,6 +192,7 @@ export async function runAssistantToolLoop(
     );
     const next = await options.modelCall(input);
     if (!next.ok) {
+      log(`tool_loop_model_call_failed status=${next.status}`);
       text = fallbackText;
       break;
     }
@@ -198,5 +206,6 @@ export async function runAssistantToolLoop(
     text = text || fallbackText;
   }
 
+  log(`tool_loop_finished rounds=${toolRounds} has_text=${text.length > 0}`);
   return { text, toolRounds, toolResults };
 }
