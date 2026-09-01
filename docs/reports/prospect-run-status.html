@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>AIVaultsAI — Prospect-Run Statusrapport</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a; line-height: 1.45; }
+  h1 { font-size: 17pt; margin: 0 0 2pt 0; }
+  h2 { font-size: 12.5pt; margin: 14pt 0 4pt 0; border-bottom: 1.5pt solid #b08d3e; padding-bottom: 2pt; color: #1a1a1a; }
+  h3 { font-size: 11pt; margin: 10pt 0 3pt 0; }
+  p { margin: 4pt 0; }
+  ul { margin: 4pt 0 6pt 0; padding-left: 16pt; }
+  li { margin: 1.5pt 0; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: #f4f1e8; padding: 0 3pt; border-radius: 2pt; }
+  .meta { color: #666; font-size: 9.5pt; margin-bottom: 10pt; }
+  .box { border: 1pt solid #ddd; border-left: 3pt solid #b08d3e; padding: 6pt 10pt; margin: 8pt 0; background: #faf8f2; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 9.5pt; }
+  th, td { border: 0.75pt solid #ccc; padding: 3pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #f0ead9; }
+  .ok { color: #1d7a34; font-weight: 600; }
+  .warn { color: #a06a00; font-weight: 600; }
+  .muted { color: #666; }
+</style>
+</head>
+<body>
+
+<h1>AIVaultsAI — Prospect-Run &amp; B2B Client Acquisition Agent</h1>
+<p class="meta">Statusrapport &middot; 1 september 2026 &middot; Branch <code>release/attribution</code> &middot; Lokaal gevalideerd, niet gedeployed</p>
+
+<div class="box">
+<strong>Kernpunten.</strong> De gecontroleerde prospect-run pipeline is lokaal ge&iuml;mplementeerd, getest en gebouwd. Er zijn <strong>geen e-mails verzonden</strong>, er is <strong>geen database-migratie uitgevoerd</strong> en er is <strong>niets gedeployed</strong>. Human-in-the-loop review is standaard actief; automatisch verzenden vereist een expliciet geconfigureerde provider en alle safety-gates.
+</div>
+
+<h2>1. Architectuur &amp; state machine</h2>
+<p>De pipeline volgt het AIVaultsAI multi-step patroon:</p>
+<ul>
+  <li><strong>Intake:</strong> company profile, web presence, publieke en CRM-signalen worden verzameld in een <code>prospect_runs</code> record (state <code>INTAKE</code>).</li>
+  <li><strong>Intent Analysis:</strong> de intelligence-stage verrijkt pain points en bewijs uit uitsluitend <em>gesaneerde</em> context (PII wordt vooraf geredigeerd).</li>
+  <li><strong>Scoring &amp; Qualification:</strong> composiete propensity score (0&ndash;100) uit commercial opportunity (55%), evidence baseline (45%) minus een uncertainty-penalty. Ontbrekende CRM-/conversiegegevens verlagen de score; ze kunnen deze nooit opblazen.</li>
+  <li><strong>Route &amp; match:</strong> <code>SOVEREIGN_LOCAL_AI</code>, <code>BYOK_COST_REDUCTION</code> of <code>HITL_COMPLIANCE</code> op basis van pain points en bewijs (compliance heeft voorrang op kostenreductie).</li>
+  <li><strong>Autonomous Outreach:</strong> gepersonaliseerde draft met opt-out-regel; standaard <code>AWAITING_REVIEW</code> (HITL), pas daarna <code>QUEUED</code>/<code>SENT</code>.</li>
+  <li><strong>Continuous Feedback:</strong> delivery-, reply- en opt-out-telemetrie wordt vastgelegd in <code>email_sequences</code> en <code>prospect_opt_outs</code>.</li>
+</ul>
+<p>State machine: <code>INTAKE &rarr; ANALYZING &rarr; QUALIFIED &rarr; ROUTED &rarr; DRAFTED &rarr; AWAITING_REVIEW | QUEUED &rarr; SENT</code>, met <code>BLOCKED</code> en <code>FAILED</code> als veilige uitkomsten.</p>
+
+<h2>2. Gebouwde componenten</h2>
+<table>
+  <tr><th>Bestand</th><th>Verantwoordelijkheid</th></tr>
+  <tr><td><code>lib/prospect-run/prospect-agent.ts</code></td><td>Staged workflow; atomair run-lock via <code>claimRun</code>; PII-sanitization v&oacute;&oacute;r model-analyse; deterministische fallback-intelligence; audit-manifest per run; nooit dispatch.</td></tr>
+  <tr><td><code>lib/prospect-run/scoring.ts</code></td><td>Propensity score (0&ndash;100), route-matching (compliance &gt; kostenreductie &gt; sovereign local AI).</td></tr>
+  <tr><td><code>lib/prospect-run/policy.ts</code></td><td>Verified-business-email-check, opt-out-, warm-up- en rate-limit-gates, SHA-256 recipient-hash, token-template-rendering, PII-redactie (e-mail/telefoon).</td></tr>
+  <tr><td><code>lib/prospect-run/email-dispatcher.ts</code></td><td>Fail-closed dispatch; <code>HUMAN_REVIEW</code> standaard; <code>AUTO_SEND</code> vereist alle gates + expliciete provider; idempotency-key per run.</td></tr>
+  <tr><td><code>lib/prospect-run/repository.ts</code></td><td>Conditionele claim (concurrency-grens), idempotente run-creatie, manifest-persistentie met SHA-256-digest in <code>audit_manifests</code>.</td></tr>
+  <tr><td><code>lib/prospect-run/openai-analyzer.ts</code> <span class="warn">(nieuw)</span></td><td>Model-verrijking via de OpenAI Responses API (strict JSON-schema-uitvoer); fail-safe: zonder key, bij timeout, HTTP-fout of ongeldige output altijd deterministische fallback; alle tekst wordt voor verzending geredigeerd.</td></tr>
+  <tr><td><code>app/api/prospect-runs/route.ts</code></td><td>Admin-only API; vereist <code>PROSPECT_RUN_API_KEY</code> (Bearer); niet publiek bereikbaar zonder configuratie.</td></tr>
+  <tr><td><code>components/prospect-run/dashboard.tsx</code></td><td>Score-/statusdashboard; bewust <em>niet</em> op de publieke site gemount.</td></tr>
+  <tr><td><code>lib/db/migrations/003_prospect_run.sql</code></td><td><code>prospect_tenants</code>, <code>prospect_runs</code>, <code>scoring_metrics</code>, <code>email_sequences</code>, <code>prospect_opt_outs</code>, <code>audit_manifests</code> (na migraties 001 en 002).</td></tr>
+</table>
+
+<h2>3. Safety &amp; compliance controls</h2>
+<ul>
+  <li>Strikte gates v&oacute;&oacute;r verzending: verified business e-mail, geen opt-out, domain warm-up, rate allowance, expliciete <code>AUTO_SEND</code>-modus, geconfigureerde provider.</li>
+  <li>PII-sanitization in elke model-aanroep (e-mailadressen en telefoonnummers worden geredigeerd; decision-maker-identiteit en directe contactgegevens verlaten het proces nooit).</li>
+  <li>GDPR-opt-out: <code>prospect_opt_outs</code> op recipient-hash; elke draft bevat een opt-out-regel; opt-out blokkeert verzending fail-closed.</li>
+  <li>Volledige audit trail: timestamped <code>run_manifest.json</code> met SHA-256-digest in <code>audit_manifests</code>; idempotency-key per run en per e-mail.</li>
+  <li>Geen enkele test gebruikt een echte database of verzendt e-mail.</li>
+</ul>
+
+<h2>4. OpenAI-analyzer (deze voortzetting)</h2>
+<ul>
+  <li>Leest <code>OPENAI_API_KEY</code> lazily uit de omgeving; zonder key wordt de veilige deterministische baseline gebruikt (module blijft importeerbaar en testbaar zonder secrets).</li>
+  <li>Responses API met strict <code>json_schema</code>-uitvoer (pains, evidence, unknowns, drie score-componenten 0&ndash;100).</li>
+  <li>Fail-safe: timeout (AbortController, 20 s), HTTP-fout, onparseerbare output en ontbrekende sleutel vallen allemaal terug op <code>inferProspectIntelligence</code>; de analyzer gooit nooit in de run-workflow en verzint nooit bewijs.</li>
+  <li>Uitvoer wordt gevalideerd en geklemd op 0&ndash;100; een reactie zonder pains én evidence wordt afgewezen.</li>
+  <li>De intelligence-bron wordt per run gelogd (<code>[prospect-run] intelligence source: ...</code>).</li>
+  <li>11 nieuwe unit-tests (211 totaal) met ge&iuml;njecteerde fake fetch; geen netwerk, geen key, geen database.</li>
+</ul>
+
+<h2>5. Validatieresultaten</h2>
+<table>
+  <tr><th>Check</th><th>Resultaat</th></tr>
+  <tr><td>Web tests (<code>apps/web</code>)</td><td class="ok">211 / 211 pass, 0 fail, 0 skipped</td></tr>
+  <tr><td>Agent-core tests (<code>packages/agent-core</code>)</td><td class="ok">237 / 237 pass, 0 fail, 0 skipped</td></tr>
+  <tr><td>ESLint (<code>apps/web</code>)</td><td class="ok">Passed</td></tr>
+  <tr><td>Production build (<code>next build</code>)</td><td class="ok">Geslaagd; route <code>/api/prospect-runs</code> opgenomen</td></tr>
+  <tr><td><code>git diff --check</code></td><td class="ok">Schoon; geen conflict-markers</td></tr>
+  <tr><td>Database gebruikt door unit tests</td><td class="ok">Nee</td></tr>
+  <tr><td>E-mails verzonden</td><td class="ok">Nee (HITL actief)</td></tr>
+</table>
+
+<h2>6. Git-status</h2>
+<ul>
+  <li><code>6c7a469</code> <code>feat: add controlled prospect run pipeline</code> &mdash; eerder lokaal gecommit en gepusht naar <code>origin/release/attribution</code> (vorige sessie).</li>
+  <li><code>eec0e6e</code> <code>fix: restore customer zero dependency injection</code> &mdash; lokale checkpoint van de customer-zero DI-fix.</li>
+  <li><code>6181c09</code> lokale merge die beide lijnen combineert op <code>release/attribution</code>.</li>
+  <li>Deze voortzetting (OpenAI-analyzer, tests, docs, rapport) volgt als lokale checkpoint-commit. <strong>Geen push</strong> vanuit deze sessie.</li>
+</ul>
+
+<h2>7. Restpunten voor productie</h2>
+<ul>
+  <li>Migratie <code>003_prospect_run.sql</code> toepassen (na 001 en 002) en een <code>prospect_tenants</code>-rij aanmaken (BYOK slaat alleen een key-referentie op).</li>
+  <li><code>PROSPECT_RUN_API_KEY</code> als server-only variabele zetten; optioneel <code>OPENAI_API_KEY</code> voor model-verrijking.</li>
+  <li>Compliante e-mailprovider implementeren; pas daarna <code>AUTO_SEND</code> overwegen.</li>
+  <li>Gedistribueerde rate limiting en warm-up-telemetrie, unsubscribe-webhook en geauthenticeerde dashboard-toegang.</li>
+  <li>Deploy naar aivaultsai.one na expliciete opdracht (volgens repositoryregels nooit automatisch).</li>
+</ul>
+
+<p class="muted">Rapport gegenereerd uit de lokale repository <code>C:\deepseek-lab\task22\aivaultsai</code> &middot; branch <code>release/attribution</code> &middot; alle resultaten zijn feitelijk uitgevoerd en vastgelegd.</p>
+
+</body>
+</html>

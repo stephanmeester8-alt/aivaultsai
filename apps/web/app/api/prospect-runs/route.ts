@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readBearerToken, verifyAssistantApiKey } from "@/lib/assistant/auth";
-import { inferProspectIntelligence, runProspectAgent } from "@/lib/prospect-run/prospect-agent";
+import { runProspectAgent } from "@/lib/prospect-run/prospect-agent";
+import { createProspectAnalyzer } from "@/lib/prospect-run/openai-analyzer";
 import { claimProspectRun, createProspectRun, persistRunManifest } from "@/lib/prospect-run/repository";
 import type { DispatchMode, ProspectInput } from "@/lib/prospect-run/types";
 
@@ -28,9 +29,12 @@ export async function POST(request: Request) {
     const { sql } = await import("@/lib/db/client");
     const mode: DispatchMode = body.dispatchMode === "AUTO_SEND" ? "AUTO_SEND" : "HUMAN_REVIEW";
     const runId = await createProspectRun(sql, body.prospect, mode, body.tenantId, body.idempotencyKey);
+    // Model enrichment via the Responses API when OPENAI_API_KEY is set;
+    // otherwise (or on any failure) the analyzer falls back to the
+    // deterministic baseline. Never blocks or fails a run.
     const result = await runProspectAgent(runId, body.prospect, mode, {
       claimRun: (id) => claimProspectRun(sql, id),
-      analyze: async (prospect) => inferProspectIntelligence(prospect),
+      analyze: createProspectAnalyzer(),
       persistManifest: (manifest) => persistRunManifest(sql, manifest),
     });
     return NextResponse.json(result, { status: result.state === "BLOCKED" ? 409 : 202 });
