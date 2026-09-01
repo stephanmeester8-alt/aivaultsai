@@ -19,6 +19,7 @@
  * recorded through the Postgres run recorder (non-fatal) when the agent
  * runtime tables exist.
  */
+import { randomUUID } from "node:crypto";
 import type {
   AgentRuntime,
   AgentRunRequest,
@@ -27,6 +28,12 @@ import type {
   ToolDefinition,
 } from "@aivaultsai/agent-core";
 import { SITE_URL } from "../site.ts";
+import { bareHostname, validateUrl } from "../seo/url-policy.ts";
+import {
+  checkDnsPolicy,
+  checkHostnamePolicy,
+  defaultDnsLookup,
+} from "../prospect-run/website-research.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -129,20 +136,30 @@ async function flushRecorderWrites(): Promise<void> {
  * Fresh runtime per invocation: stateless across requests (recorder persists).
  * Value imports of agent-core are resolved lazily here.
  */
-async function buildRuntime(): Promise<AgentRuntime> {
+async function buildRuntimeEngines() {
   const core = await import("@aivaultsai/agent-core");
   const agents = core.createInitialAgentRegistry();
   const tasks = core.createTaskEngine(agents);
   const tools = core.createToolRegistry();
   tools.register(enabledHttpTool(core));
+  const adapters = buildAdapterRegistry(core);
+  const approvals = core.createApprovalEngine(agents, tasks);
+  const evidence = core.createEvidenceStore();
+  const handoffs = core.createHandoffEngine(agents, tasks);
+  return { core, agents, tasks, tools, adapters, approvals, evidence, handoffs };
+}
+
+async function buildRuntime(): Promise<AgentRuntime> {
+  const { core, agents, tasks, handoffs, evidence, approvals, tools, adapters } =
+    await buildRuntimeEngines();
   return core.createAgentRuntime({
     agents,
     tasks,
-    handoffs: core.createHandoffEngine(agents, tasks),
-    evidence: core.createEvidenceStore(),
-    approvals: core.createApprovalEngine(agents, tasks),
+    handoffs,
+    evidence,
+    approvals,
     tools,
-    adapters: buildAdapterRegistry(core),
+    adapters,
     recorder: createLazyRecorder(),
   });
 }
@@ -243,6 +260,228 @@ export async function runConversationRuntimeTask(
     return {
       ran: false,
       error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** A function-call requested by the website assistant's model (untrusted). */
+export interface AssistantToolCall {
+  callId: string;
+  name: string;
+  /** Raw JSON string from the model (untrusted). */
+  arguments: string;
+}
+
+export interface AssistantToolExecution {
+  ok: boolean;
+  output: unknown;
+  error: string | null;
+  executionStatus: string | null;
+  evidenceIds: string[];
+}
+
+export interface AssistantToolDeps {
+  /** Pre-built engines + gate (tests); defaults to the production core. */
+  core?: AssistantToolCore;
+  /** DNS resolver for the pre-flight SSRF check (tests). */
+  lookup?: (host: string) => Promise<readonly string[]>;
+  log?: (message: string) => void;
+}
+
+/**
+ * The assistant tool executes through the EXISTING ExecutionGate with the
+ * same engines as the Agent Runtime (agents, tasks, tools, approvals,
+ * adapters, evidence, recorder) — no second runtime, no direct fetch.
+ */
+export interface AssistantToolCore {
+  tasks: import("@aivaultsai/agent-core").TaskEngine;
+  gate: import("@aivaultsai/agent-core").ExecutionGate;
+  evidence: import("@aivaultsai/agent-core").EvidenceStore;
+  recorder: RunRecorder;
+}
+
+/** Production core: the same engine instances the Agent Runtime uses. */
+export async function buildAssistantToolCore(): Promise<AssistantToolCore> {
+  const { core, agents, tasks, tools, adapters, approvals, evidence } =
+    await buildRuntimeEngines();
+  return {
+    tasks,
+    gate: core.createExecutionGate({ agents, tasks, tools, approvals, adapters }),
+    evidence,
+    recorder: createLazyRecorder(),
+  };
+}
+
+export const ASSISTANT_WEBSITE_RESEARCH_TOOL = "assistant_website_research";
+const MAX_TOOL_OUTPUT_CHARS = 8000;
+
+function truncateToolOutput(output: unknown): unknown {
+  if (!output || typeof output !== "object") return output;
+  const record = output as Record<string, unknown>;
+  if (typeof record["body"] !== "string") return output;
+  const body = record["body"] as string;
+  return {
+    ...record,
+    body: body.length > MAX_TOOL_OUTPUT_CHARS ? `${body.slice(0, MAX_TOOL_OUTPUT_CHARS)}\n[truncated]` : body,
+  };
+}
+
+/**
+ * Bridge: execute ONE assistant tool-call through the EXISTING ExecutionGate
+ * (PolicyEngine -> ExecutionGate -> HttpAdapter -> evidence). The model never
+ * fetches anything itself; every call is validated, permission-checked and
+ * executed by the gate. Fail-closed: unknown tool, malformed arguments,
+ * invalid/private URLs and execution failures return structured errors.
+ */
+export async function executeAssistantToolCall(
+  call: AssistantToolCall,
+  deps: AssistantToolDeps = {},
+): Promise<AssistantToolExecution> {
+  const log = deps.log ?? ((message: string) => console.info(`[assistant-tool] ${message}`));
+
+  if (call.name !== ASSISTANT_WEBSITE_RESEARCH_TOOL) {
+    return { ok: false, output: null, error: "UNKNOWN_TOOL", executionStatus: "REJECTED", evidenceIds: [] };
+  }
+
+  let parsed: { url?: unknown };
+  try {
+    parsed = JSON.parse(call.arguments) as { url?: unknown };
+  } catch {
+    return { ok: false, output: null, error: "INVALID_TOOL_ARGUMENTS", executionStatus: "REJECTED", evidenceIds: [] };
+  }
+  if (typeof parsed.url !== "string" || parsed.url.trim().length === 0) {
+    return { ok: false, output: null, error: "MISSING_URL", executionStatus: "REJECTED", evidenceIds: [] };
+  }
+  const url = parsed.url.trim();
+
+  // Pre-flight SSRF guards (defense in depth — the HttpAdapter re-checks
+  // every hop before any request is sent).
+  const validation = validateUrl(url);
+  if (!validation.ok) {
+    return { ok: false, output: null, error: `INVALID_URL: ${validation.reason}`, executionStatus: "REJECTED", evidenceIds: [] };
+  }
+  const hostPolicy = checkHostnamePolicy(validation.url.hostname);
+  if (!hostPolicy.ok) {
+    return { ok: false, output: null, error: hostPolicy.reason, executionStatus: "REJECTED", evidenceIds: [] };
+  }
+  const dnsPolicy = await checkDnsPolicy(
+    bareHostname(validation.url),
+    deps.lookup ?? defaultDnsLookup,
+  );
+  if (!dnsPolicy.ok) {
+    return { ok: false, output: null, error: dnsPolicy.reason, executionStatus: "REJECTED", evidenceIds: [] };
+  }
+
+  const core = deps.core ?? (await buildAssistantToolCore());
+  const taskId = `assistant_task_${randomUUID()}`;
+  const executionId = `assistant_exec_${randomUUID()}`;
+  const timestamp = new Date().toISOString();
+
+  try {
+    core.tasks.createTask({
+      taskId,
+      title: "Website research (assistant tool)",
+      objective: `Website research requested by the website assistant: ${url}`,
+      createdBy: "system",
+      assignedTo: null,
+      priority: 1,
+      status: "READY",
+      riskLevel: "MEDIUM",
+      inputs: {
+        toolId: "http",
+        requestedPermissions: ["API_REQUEST"],
+        invocation: { capability: "API_REQUEST", arguments: { url } },
+      },
+      expectedOutput: "Fetched public page content with execution evidence",
+      dependencies: [],
+      evidenceRequired: false,
+      failureReason: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    } as never);
+
+    const execution = await core.gate.execute({
+      executionId,
+      taskId,
+      agentId: "research_intelligence",
+      toolId: "http",
+      requestedAction: ASSISTANT_WEBSITE_RESEARCH_TOOL,
+      requestedPermissions: ["API_REQUEST"],
+      riskLevel: "MEDIUM",
+      approvalId: null,
+      input: {
+        capability: "API_REQUEST",
+        arguments: { url },
+      },
+    });
+    log(`tool ${call.callId} (${url}) -> ${execution.status}`);
+
+    // Append-only evidence + recorder (non-fatal; audit trail).
+    if (execution.executionOccurred) {
+      try {
+        core.evidence.createEvidence({
+          evidenceId: randomUUID(),
+          claim: `Website research executed: ${url}`,
+          type: "FACT",
+          source: url,
+          sourceType: "public_website",
+          supportingData: execution.status,
+          confidence: "HIGH",
+          provenance: {
+            actor: "research_intelligence",
+            toolId: "http",
+            capability: "API_REQUEST",
+            method: ASSISTANT_WEBSITE_RESEARCH_TOOL,
+            origin: "agent_research",
+            executionOccurred: true,
+            executionId,
+          },
+          createdAt: timestamp,
+        } as never);
+      } catch {
+        /* evidence is non-fatal */
+      }
+    }
+    try {
+      core.recorder.record({
+        runId: taskId,
+        state: execution.status,
+        kind: "execution",
+        taskId,
+        agentId: "research_intelligence",
+        toolId: "http",
+        timestamp,
+        data: { executionId, error: execution.error },
+      } as never);
+    } catch {
+      /* recorder is non-fatal */
+    }
+
+    if (execution.status !== "SUCCEEDED") {
+      return {
+        ok: false,
+        output: null,
+        error: execution.error ?? `EXECUTION_${execution.status}`,
+        executionStatus: execution.status,
+        evidenceIds: [],
+      };
+    }
+    return {
+      ok: true,
+      output: truncateToolOutput(execution.output),
+      error: null,
+      executionStatus: execution.status,
+      evidenceIds: [],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log(`tool ${call.callId} failed: ${message.slice(0, 200)}`);
+    return {
+      ok: false,
+      output: null,
+      error: message.slice(0, 300),
+      executionStatus: "FAILED",
+      evidenceIds: [],
     };
   }
 }

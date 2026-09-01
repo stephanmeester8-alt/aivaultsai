@@ -61,6 +61,11 @@ const DEFAULT_MAX_BYTES = 512 * 1024;
 const DEFAULT_MAX_REDIRECTS = 3;
 const DEFAULT_MAX_TEXT_CHARS = 20_000;
 
+/** Shared DNS resolver: host -> addresses (node dns, all records). */
+export async function defaultDnsLookup(host: string): Promise<readonly string[]> {
+  return (await dnsLookup(host, { all: true })).map((address) => address.address);
+}
+
 export function isPlainHostname(host: string): boolean {
   return !isLocalhostName(host) && !host.includes(":") && !/^\d{1,3}(\.\d{1,3}){3}$/.test(host);
 }
@@ -181,7 +186,7 @@ export async function researchWebsite(
   deps: WebsiteResearchDeps = {},
 ): Promise<WebsiteResearchResult> {
   const fetchImpl = deps.fetchImpl ?? fetch;
-  const lookup = deps.lookup ?? (async (host) => (await dnsLookup(host, { all: true })).map((a) => a.address));
+  const lookup = deps.lookup ?? defaultDnsLookup;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = deps.maxBytes ?? DEFAULT_MAX_BYTES;
   const maxRedirects = deps.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
