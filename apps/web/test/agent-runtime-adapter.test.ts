@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import * as core from "../../../packages/agent-core/src/index.ts";
@@ -42,7 +42,7 @@ function fakeAdapter(output: unknown) {
 
 /**
  * Build a REAL Agent Runtime core (PolicyEngine + ExecutionGate) with the
- * production tool registry and an injected fake adapter — the bridge is then
+ * production tool registry and an injected fake adapter â€” the bridge is then
  * exercised against the actual gate, exactly as in production.
  */
 function buildToolCore(options: {
@@ -115,7 +115,7 @@ test("atomically claims only one runtime run per conversation", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Assistant tool bridge — exercised against the REAL ExecutionGate and
+// Assistant tool bridge â€” exercised against the REAL ExecutionGate and
 // PolicyEngine (fake HTTP adapter only; the real HttpAdapter SSRF coverage
 // lives in the agent-core adapters suite).
 // ---------------------------------------------------------------------------
@@ -169,15 +169,19 @@ test("bridge: unsupported scheme is rejected", async () => {
 });
 
 test("bridge: tool call passes the real gate and reaches the adapter", async () => {
+  const html = `<html><head><title>Acme BV</title></head><body><h1>Acme BV</h1>
+  ${"<p>Wij leveren kwaliteit sinds 1998. Ons team staat voor u klaar met advies en ondersteuning op maat.</p>".repeat(14)}
+  </body></html>`;
   const core = buildToolCore({
-    adapter: fakeAdapter({ status: 200, ok: true, url: "https://example.com", body: "<html>chat widget</html>" }),
+    adapter: fakeAdapter({ status: 200, ok: true, url: "https://example.com", body: html, truncated: false }),
   });
-  const result = await executeAssistantToolCall(toolCall(), { core });
+  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, true);
   assert.equal(result.executionStatus, "SUCCEEDED");
-  const output = result.output as { status: number; body: string };
-  assert.equal(output.status, 200);
-  assert.match(output.body, /chat widget/);
+  const summary = result.output as { title: string | null; pagesChecked: string[]; chatbotDetection: { status: string } | null };
+  assert.equal(summary.title, "Acme BV");
+  assert.equal(summary.pagesChecked.length, 1);
+  assert.ok(summary.chatbotDetection);
 });
 
 test("bridge: disabled tool is blocked by the gate (NOT executed)", async () => {
@@ -185,7 +189,7 @@ test("bridge: disabled tool is blocked by the gate (NOT executed)", async () => 
     adapter: fakeAdapter({ status: 200, body: "x" }),
     enabled: false,
   });
-  const result = await executeAssistantToolCall(toolCall(), { core });
+  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /disabled/i);
   assert.equal(result.executionStatus, "REJECTED");
@@ -193,7 +197,7 @@ test("bridge: disabled tool is blocked by the gate (NOT executed)", async () => 
 
 test("bridge: missing adapter is NOT_IMPLEMENTED (nothing executes)", async () => {
   const core = buildToolCore({ adapter: undefined });
-  const result = await executeAssistantToolCall(toolCall(), { core });
+  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /No adapter|unavailable/i);
   assert.equal(result.executionStatus, "NOT_IMPLEMENTED");
@@ -206,7 +210,7 @@ test("bridge: policy denies execution when the agent lacks the permission", asyn
     adapter: fakeAdapter({ status: 200, body: "x" }),
     allowedTools: [],
   });
-  const result = await executeAssistantToolCall(toolCall(), { core });
+  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /prohibited|denied|permission/i);
   assert.equal(result.executionStatus, "REJECTED");
@@ -230,7 +234,7 @@ test("bridge: execution failure never throws; structured error is returned", asy
     }),
   };
   const core = buildToolCore({ adapter });
-  const result = await executeAssistantToolCall(toolCall(), { core });
+  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.equal(result.error, "response exceeds maxBytes");
   assert.equal(result.executionStatus, "FAILED");

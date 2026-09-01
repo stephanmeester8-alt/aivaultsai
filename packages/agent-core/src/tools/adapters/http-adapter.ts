@@ -7,6 +7,10 @@ export type HttpAdapterOptions = {
   readonly maxBytes?: number;
   readonly timeoutMs?: number;
   readonly maxRedirects?: number;
+  /** Injectable fetch (tests); defaults to the global fetch. */
+  readonly fetchImpl?: typeof fetch;
+  /** Injectable DNS resolver (tests); defaults to node:dns/promises. */
+  readonly lookup?: (host: string) => Promise<readonly string[]>;
 };
 
 function isPrivateIPv4(ip: string): boolean {
@@ -45,7 +49,10 @@ function isBlockedAddress(address: string): boolean {
 }
 
 /** SSRF guard: DNS-resolve the host and block private/reserved destinations. */
-async function assertPublicUrl(rawUrl: string): Promise<URL> {
+async function assertPublicUrl(
+  rawUrl: string,
+  lookup: (host: string) => Promise<readonly string[]>,
+): Promise<URL> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -62,10 +69,9 @@ async function assertPublicUrl(rawUrl: string): Promise<URL> {
   if (!hostname || hostname.length === 0) {
     throw new Error("URL host is missing");
   }
-  let addresses: string[];
+  let addresses: readonly string[];
   try {
-    const records = await lookup(hostname, { all: true });
-    addresses = records.map((record) => record.address);
+    addresses = await lookup(hostname);
   } catch {
     throw new Error("hostname could not be resolved");
   }
@@ -77,6 +83,49 @@ async function assertPublicUrl(rawUrl: string): Promise<URL> {
     throw new Error(`URL resolves to a blocked (private/reserved) address: ${hostname}`);
   }
   return url;
+}
+
+/**
+ * Read the response body up to `maxBytes` bytes. Oversized responses are
+ * accepted partially (transport cap stays hard for memory safety) and marked
+ * with `truncated: true` so callers can bound the LLM context instead of
+ * failing the whole research.
+ */
+async function readCappedBody(
+  response: Response,
+  maxBytes: number,
+): Promise<{ body: string; truncated: boolean }> {
+  if (!response.body) {
+    return { body: "", truncated: false };
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > maxBytes) {
+        truncated = true;
+        const remaining = maxBytes - (total - value.byteLength);
+        if (remaining > 0) chunks.push(value.subarray(0, remaining));
+        break;
+      }
+      chunks.push(value);
+    }
+  }
+  const merged = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return {
+    body: new TextDecoder("utf-8", { fatal: false }).decode(merged).replace(/\0/g, ""),
+    truncated,
+  };
 }
 
 const ALLOWED_REQUEST_HEADERS = new Set(["accept", "user-agent"]);
@@ -94,11 +143,15 @@ export class HttpAdapter {
   readonly #maxBytes: number;
   readonly #timeoutMs: number;
   readonly #maxRedirects: number;
+  readonly #fetch: typeof fetch;
+  readonly #lookup: (host: string) => Promise<readonly string[]>;
 
   constructor(options: HttpAdapterOptions = {}) {
     this.#maxBytes = options.maxBytes ?? 256 * 1024;
     this.#timeoutMs = options.timeoutMs ?? 10_000;
     this.#maxRedirects = options.maxRedirects ?? 3;
+    this.#fetch = options.fetchImpl ?? fetch;
+    this.#lookup = options.lookup ?? (async (host) => (await lookup(host, { all: true })).map((record) => record.address));
   }
 
   async execute(request: ExecutionRequest): Promise<ExecutionResult> {
@@ -122,7 +175,7 @@ export class HttpAdapter {
         }
       }
 
-      let url = await assertPublicUrl(args["url"]);
+      let url = await assertPublicUrl(args["url"], this.#lookup);
       let redirects = 0;
       let response: Response;
 
@@ -130,7 +183,7 @@ export class HttpAdapter {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), this.#timeoutMs);
         try {
-          response = await fetch(url.toString(), {
+          response = await this.#fetch(url.toString(), {
             method: "GET",
             headers: { "user-agent": "aivaultsai-http-adapter/1.0", ...headers },
             redirect: "manual",
@@ -146,20 +199,13 @@ export class HttpAdapter {
             return failedResult(request, `redirect limit reached (${redirects})`, startedAt);
           }
           redirects += 1;
-          url = await assertPublicUrl(new URL(location, url).toString());
+          url = await assertPublicUrl(new URL(location, url).toString(), this.#lookup);
           continue;
         }
         break;
       }
 
-      const contentLength = Number(response.headers.get("content-length") ?? 0);
-      if (contentLength > this.#maxBytes) {
-        return failedResult(request, "response exceeds maxBytes", startedAt);
-      }
-      const body = await response.text();
-      if (Buffer.byteLength(body, "utf8") > this.#maxBytes) {
-        return failedResult(request, "response exceeds maxBytes", startedAt);
-      }
+      const { body, truncated } = await readCappedBody(response, this.#maxBytes);
 
       return succeededResult(
         request,
@@ -168,6 +214,7 @@ export class HttpAdapter {
           ok: response.ok,
           url: response.url,
           body,
+          truncated,
         },
         startedAt,
       );

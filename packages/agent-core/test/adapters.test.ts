@@ -180,3 +180,32 @@ test("HttpAdapter never forwards sensitive headers", async () => {
   // Blocked before any request is sent, so no secret can leak anywhere.
   assert.equal(result.status, "FAILED");
 });
+
+test("HttpAdapter returns a truncated body instead of failing on oversized responses", async () => {
+  const big = "<html>" + "x".repeat(5000) + "</html>";
+  const adapter = new HttpAdapter({
+    maxBytes: 1024,
+    fetchImpl: async () => new Response(big, { status: 200 }),
+    lookup: async () => ["93.184.216.34"],
+  });
+  const result = await adapter.execute(httpRequest("https://example.com"));
+  assert.equal(result.status, "SUCCEEDED");
+  assert.equal(result.executionOccurred, true);
+  const output = result.output as { truncated: boolean; body: string };
+  assert.equal(output.truncated, true);
+  assert.ok(output.body.length <= 1024, `body capped, got ${output.body.length}`);
+  assert.match(output.body, /^<html>/);
+});
+
+test("HttpAdapter passes small responses through untruncated", async () => {
+  const adapter = new HttpAdapter({
+    maxBytes: 4096,
+    fetchImpl: async () => new Response("<html>klein</html>", { status: 200 }),
+    lookup: async () => ["93.184.216.34"],
+  });
+  const result = await adapter.execute(httpRequest("https://example.com"));
+  assert.equal(result.status, "SUCCEEDED");
+  const output = result.output as { truncated: boolean; body: string };
+  assert.equal(output.truncated, false);
+  assert.equal(output.body, "<html>klein</html>");
+});

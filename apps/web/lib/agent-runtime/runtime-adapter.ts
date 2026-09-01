@@ -34,6 +34,10 @@ import {
   checkHostnamePolicy,
   defaultDnsLookup,
 } from "../prospect-run/website-research.ts";
+import {
+  buildResearchSummary,
+  mergeResearchSummary,
+} from "../assistant/research-summary.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,13 +82,39 @@ function enabledHttpTool(core: typeof import("@aivaultsai/agent-core")): ToolDef
   return { ...core.HTTP_TOOL, enabled: true };
 }
 
+/**
+ * Assistant website-research transport limits (explicit and configurable).
+ * Transport cap != LLM context cap: the adapter may receive a bounded large
+ * page (truncated), while the LLM only ever sees the compact research
+ * summary built in research-summary.ts.
+ */
+export const ASSISTANT_HTTP_MAX_BYTES = 2 * 1024 * 1024;
+export const ASSISTANT_HTTP_TIMEOUT_MS = 10_000;
+export const ASSISTANT_HTTP_MAX_REDIRECTS = 3;
+/** Max pages researched per tool call (homepage + subpages). */
+export const ASSISTANT_RESEARCH_MAX_PAGES = 3;
+/** Subpages probed (in order) only when the homepage gives insufficient evidence. */
+export const ASSISTANT_RESEARCH_SUBPAGES = [
+  "/contact",
+  "/contact-us",
+  "/over-ons",
+  "/about",
+  "/diensten",
+  "/services",
+  "/klantenservice",
+  "/support",
+  "/faq",
+  "/prijzen",
+  "/offerte",
+] as const;
+
 function buildAdapterRegistry(core: typeof import("@aivaultsai/agent-core")) {
   const registry = new core.ToolAdapterRegistry();
   registry.register(
     new core.HttpAdapter({
-      maxBytes: 32 * 1024,
-      timeoutMs: 5_000,
-      maxRedirects: 2,
+      maxBytes: ASSISTANT_HTTP_MAX_BYTES,
+      timeoutMs: ASSISTANT_HTTP_TIMEOUT_MS,
+      maxRedirects: ASSISTANT_HTTP_MAX_REDIRECTS,
     }),
   );
   return registry;
@@ -313,18 +343,9 @@ export async function buildAssistantToolCore(): Promise<AssistantToolCore> {
 }
 
 export const ASSISTANT_WEBSITE_RESEARCH_TOOL = "assistant_website_research";
-const MAX_TOOL_OUTPUT_CHARS = 8000;
 
-function truncateToolOutput(output: unknown): unknown {
-  if (!output || typeof output !== "object") return output;
-  const record = output as Record<string, unknown>;
-  if (typeof record["body"] !== "string") return output;
-  const body = record["body"] as string;
-  return {
-    ...record,
-    body: body.length > MAX_TOOL_OUTPUT_CHARS ? `${body.slice(0, MAX_TOOL_OUTPUT_CHARS)}\n[truncated]` : body,
-  };
-}
+/** Homepage evidence threshold below which relevant subpages are probed. */
+const ASSISTANT_RESEARCH_MIN_TEXT = 800;
 
 /**
  * Bridge: execute ONE assistant tool-call through the EXISTING ExecutionGate
@@ -332,6 +353,11 @@ function truncateToolOutput(output: unknown): unknown {
  * fetches anything itself; every call is validated, permission-checked and
  * executed by the gate. Fail-closed: unknown tool, malformed arguments,
  * invalid/private URLs and execution failures return structured errors.
+ *
+ * The LLM only ever receives a COMPACT normalized research summary (see
+ * research-summary.ts); raw HTML never leaves the bridge. When the homepage
+ * gives insufficient evidence, a bounded number of relevant subpages is
+ * probed (every page through the same gate with its own SSRF pre-flight).
  */
 export async function executeAssistantToolCall(
   call: AssistantToolCall,
@@ -374,8 +400,7 @@ export async function executeAssistantToolCall(
 
   const core = deps.core ?? (await buildAssistantToolCore());
   const taskId = `assistant_task_${randomUUID()}`;
-  const executionId = `assistant_exec_${randomUUID()}`;
-  const timestamp = new Date().toISOString();
+  const startedAt = Date.now();
 
   try {
     core.tasks.createTask({
@@ -396,81 +421,152 @@ export async function executeAssistantToolCall(
       dependencies: [],
       evidenceRequired: false,
       failureReason: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     } as never);
 
-    const execution = await core.gate.execute({
-      executionId,
-      taskId,
-      agentId: "research_intelligence",
-      toolId: "http",
-      requestedAction: ASSISTANT_WEBSITE_RESEARCH_TOOL,
-      requestedPermissions: ["API_REQUEST"],
-      riskLevel: "MEDIUM",
-      approvalId: null,
-      input: {
-        capability: "API_REQUEST",
-        arguments: { url },
-      },
-    });
-    log(`tool ${call.callId} (${url}) -> ${execution.status}`);
-
-    // Append-only evidence + recorder (non-fatal; audit trail).
-    if (execution.executionOccurred) {
-      try {
-        core.evidence.createEvidence({
-          evidenceId: randomUUID(),
-          claim: `Website research executed: ${url}`,
-          type: "FACT",
-          source: url,
-          sourceType: "public_website",
-          supportingData: execution.status,
-          confidence: "HIGH",
-          provenance: {
-            actor: "research_intelligence",
-            toolId: "http",
-            capability: "API_REQUEST",
-            method: ASSISTANT_WEBSITE_RESEARCH_TOOL,
-            origin: "agent_research",
-            executionOccurred: true,
-            executionId,
-          },
-          createdAt: timestamp,
-        } as never);
-      } catch {
-        /* evidence is non-fatal */
-      }
-    }
-    try {
-      core.recorder.record({
-        runId: taskId,
-        state: execution.status,
-        kind: "execution",
+    const fetchPage = async (pageUrl: string, pageLabel: string) => {
+      const executionId = `assistant_exec_${randomUUID()}`;
+      log(`website_research_started url=${pageUrl} label=${pageLabel}`);
+      const execution = await core.gate.execute({
+        executionId,
         taskId,
         agentId: "research_intelligence",
         toolId: "http",
-        timestamp,
-        data: { executionId, error: execution.error },
-      } as never);
-    } catch {
-      /* recorder is non-fatal */
-    }
+        requestedAction: ASSISTANT_WEBSITE_RESEARCH_TOOL,
+        requestedPermissions: ["API_REQUEST"],
+        riskLevel: "MEDIUM",
+        approvalId: null,
+        input: {
+          capability: "API_REQUEST",
+          arguments: { url: pageUrl },
+        },
+      });
+      log(
+        `website_fetch_completed url=${pageUrl} status=${execution.status} error=${execution.error ?? "none"}`,
+      );
 
-    if (execution.status !== "SUCCEEDED") {
+      // Append-only evidence + recorder (non-fatal; audit trail).
+      if (execution.executionOccurred) {
+        try {
+          core.evidence.createEvidence({
+            evidenceId: randomUUID(),
+            claim: `Website research executed: ${pageUrl}`,
+            type: "FACT",
+            source: pageUrl,
+            sourceType: "public_website",
+            supportingData: execution.status,
+            confidence: "HIGH",
+            provenance: {
+              actor: "research_intelligence",
+              toolId: "http",
+              capability: "API_REQUEST",
+              method: ASSISTANT_WEBSITE_RESEARCH_TOOL,
+              origin: "agent_research",
+              executionOccurred: true,
+              executionId,
+            },
+            createdAt: new Date().toISOString(),
+          } as never);
+        } catch {
+          /* evidence is non-fatal */
+        }
+      }
+      try {
+        core.recorder.record({
+          runId: taskId,
+          state: execution.status,
+          kind: "execution",
+          taskId,
+          agentId: "research_intelligence",
+          toolId: "http",
+          timestamp: new Date().toISOString(),
+          data: { executionId, url: pageUrl, error: execution.error },
+        } as never);
+      } catch {
+        /* recorder is non-fatal */
+      }
+      return execution;
+    };
+
+    const homepage = await fetchPage(url, "homepage");
+    if (homepage.status !== "SUCCEEDED") {
       return {
         ok: false,
         output: null,
-        error: execution.error ?? `EXECUTION_${execution.status}`,
-        executionStatus: execution.status,
+        error: homepage.error ?? `EXECUTION_${homepage.status}`,
+        executionStatus: homepage.status,
         evidenceIds: [],
       };
     }
+    const homepageOutput = homepage.output as { status?: number; ok?: boolean; url?: string; body?: string; truncated?: boolean };
+    const html = homepageOutput.body ?? "";
+    log(
+      `website_fetch_limited url=${url} truncated=${homepageOutput.truncated === true} bytes=${html.length}`,
+    );
+
+    let summary = buildResearchSummary(html, homepageOutput.url ?? url);
+    if (homepageOutput.truncated === true) {
+      summary = { ...summary, truncated: true, limitations: [...summary.limitations, "response_truncated"] };
+    }
+    log(`website_page_analyzed url=${summary.url} detection=${summary.chatbotDetection?.status ?? "n/a"}`);
+
+    // Bounded subpage research: only when the homepage gives insufficient
+    // evidence; every page through the same gate with its own SSRF pre-flight.
+    const homepageWeak =
+      summary.visibleText.length < ASSISTANT_RESEARCH_MIN_TEXT ||
+      summary.chatbotDetection?.status === "unknown";
+    if (homepageWeak && summary.pagesChecked.length < ASSISTANT_RESEARCH_MAX_PAGES) {
+      const base = new URL(summary.url);
+      const budget = ASSISTANT_RESEARCH_MAX_PAGES - summary.pagesChecked.length;
+      for (const path of ASSISTANT_RESEARCH_SUBPAGES) {
+        if (summary.pagesChecked.length >= ASSISTANT_RESEARCH_MAX_PAGES) break;
+        const subUrl = new URL(path, base).toString();
+        const subValidation = validateUrl(subUrl);
+        const subHost = subValidation.ok
+          ? checkHostnamePolicy(subValidation.url.hostname)
+          : { ok: false as const, reason: "INVALID_URL" };
+        let subDns: { ok: true } | { ok: false; reason: string };
+        if (subValidation.ok && subHost.ok) {
+          subDns = await checkDnsPolicy(bareHostname(subValidation.url), deps.lookup ?? defaultDnsLookup);
+        } else {
+          subDns = { ok: false, reason: subHost.ok ? "INVALID_URL" : subHost.reason };
+        }
+        if (!subValidation.ok || !subHost.ok || !subDns.ok) {
+          summary = {
+            ...summary,
+            limitations: [...summary.limitations, `subpage_blocked:${path}`],
+          };
+          continue;
+        }
+        const subExecution = await fetchPage(subUrl, `subpage:${path}`);
+        if (subExecution.status !== "SUCCEEDED") {
+          summary = {
+            ...summary,
+            limitations: [...summary.limitations, `subpage_failed:${path}:${subExecution.error ?? subExecution.status}`],
+          };
+          continue;
+        }
+        const subOutput = subExecution.output as { url?: string; body?: string; truncated?: boolean };
+        const subSummary = buildResearchSummary(subOutput.body ?? "", subOutput.url ?? subUrl);
+        summary = mergeResearchSummary(summary, subSummary);
+        if (subOutput.truncated === true) {
+          summary = { ...summary, truncated: true };
+        }
+        log(`website_page_analyzed url=${subUrl} detection=${subSummary.chatbotDetection?.status ?? "n/a"}`);
+        if (budget - 1 <= 0) break;
+      }
+    }
+
+    log(
+      `website_research_completed pages=${summary.pagesChecked.length} durationMs=${Date.now() - startedAt} detection=${summary.chatbotDetection?.status ?? "n/a"}`,
+    );
+
     return {
       ok: true,
-      output: truncateToolOutput(execution.output),
+      output: summary,
       error: null,
-      executionStatus: execution.status,
+      executionStatus: homepage.status,
       evidenceIds: [],
     };
   } catch (error) {
