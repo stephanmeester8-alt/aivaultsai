@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>AIVaultsAI — Launch-sessie "Test commerciële intententie"</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 9.8pt; color: #1a1a1a; line-height: 1.42; }
+  h1 { font-size: 15.5pt; margin: 0 0 2pt 0; }
+  h2 { font-size: 11.5pt; margin: 12pt 0 4pt 0; border-bottom: 1.5pt solid #b08d3e; padding-bottom: 2pt; }
+  p { margin: 3.5pt 0; }
+  ul { margin: 3pt 0 5pt 0; padding-left: 15pt; }
+  li { margin: 1.2pt 0; }
+  code, pre { font-family: Consolas, monospace; font-size: 8.4pt; background: #f4f1e8; }
+  code { padding: 0 2.5pt; border-radius: 2pt; }
+  pre { padding: 5pt 7pt; border: 0.75pt solid #ddd; border-radius: 3pt; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 5pt 0; font-size: 8.8pt; }
+  th, td { border: 0.75pt solid #ccc; padding: 2.5pt 5pt; text-align: left; vertical-align: top; }
+  th { background: #f0ead9; }
+  .meta { color: #666; font-size: 8.8pt; margin-bottom: 8pt; }
+  .warn { color: #a00; font-weight: 600; }
+  .box { border: 1pt solid #ddd; border-left: 3pt solid #b08d3e; padding: 5pt 9pt; margin: 7pt 0; background: #faf8f2; }
+</style>
+</head>
+<body>
+
+<h1>AIVaultsAI — Launch-sessie "Test commerciële intententie"</h1>
+<p class="meta">Analyse van gedeelde ChatGPT-conversatie 6a96389b &middot; 19 augustus 2026 &middot; GPT-5.6 &middot; 408 berichten &middot; Branch <code>feat/customer-zero-booking-engine</code> &middot; Opgeslagen 1 september 2026</p>
+
+<div class="box"><strong>Kern.</strong> Deze sessie dekte de eerste AIVaultsAI-launch af: fix van de commerciële-intent-classifier (20/20 tests), contactkanalen (e-mail + LinkedIn) op de site, Vercel-deployment op <code>aivaultsai.one</code>, social/branding (LinkedIn-post, TikTok, logo #5), en <strong>TASK 01: Customer Zero Orchestrator</strong> met testroute en de diagnose van de databasefout <code>leads_conversation_id_fkey</code>.</div>
+
+<h2>1. Operationele informatie</h2>
+<table>
+  <tr><th>Onderdeel</th><th>Waarde</th></tr>
+  <tr><td>Contact e-mail</td><td><code>aivaultsai@gmail.com</code> (centraal in <code>lib/site.ts</code>: <code>CONTACT_EMAIL</code>)</td></tr>
+  <tr><td>LinkedIn</td><td><code>https://www.linkedin.com/in/stephan-meester-758566374/</code> (<code>LINKEDIN_URL</code>)</td></tr>
+  <tr><td>Productie-URL</td><td><code>https://www.aivaultsai.one</code> (Vercel-domein gekoppeld, status "Valid"; <code>aivaultsai.vercel.app</code> is niet de productie-URL)</td></tr>
+  <tr><td>Deploy-flow</td><td>branch pushen &rarr; PR &rarr; checks &rarr; merge &rarr; Vercel deployt automatisch (PR #2 en #3 gemerged)</td></tr>
+  <tr><td>Classifiers</td><td>fix in testscript <code>scripts/test-commercial-intent.mjs</code> (niet de classifier); 20/20 tests PASS</td></tr>
+  <tr><td>mailto-knop</td><td>"Plan een kennismaking" &rarr; Gmail-compose: Aan <code>aivaultsai@gmail.com</code>, Onderwerp "Kennismaking AIVaultsAI"</td></tr>
+</table>
+<table>
+  <tr><th>Commit</th><th>Message</th></tr>
+  <tr><td><code>5c48542</code></td><td>feat: customer zero booking and commercial intent (uitgangspunt)</td></tr>
+  <tr><td><code>bce0aea</code></td><td>fix: align commercial intent tests with production classifier</td></tr>
+  <tr><td><code>6036d4f</code></td><td>feat: add AIVaultsAI contact channels (2 files, +47/−7)</td></tr>
+  <tr><td><code>8ffefdc</code></td><td>fix: improve contact email actions</td></tr>
+</table>
+
+<h2>2. TASK 01 — Customer Zero Orchestrator</h2>
+<ul>
+  <li>Vastgesteld: alle onderdelen bestonden (chat, conversations, intent, lead repository, booking, migratie) maar er was <strong>nog geen centrale orchestrator</strong>.</li>
+  <li>Aangemaakt: <code>apps/web/lib/customer-zero/orchestrator.ts</code> (eerste versie 1702 bytes) en de testroute <code>apps/web/app/api/customer-zero/test-orchestrator/route.ts</code> (maakt eerst een echte <code>conversations</code>-rij aan, roept daarna de orchestrator aan, retourneert JSON; fouten non-fataal als <code>{ok:false}</code>/500).</li>
+  <li class="warn"><strong>Gevonden databasefout:</strong> <code>NeonDbError: ... violates foreign key constraint "leads_conversation_id_fkey"</code> &mdash; de test gebruikte <code>crypto.randomUUID()</code> zonder die conversation aan te maken. Fix: alleen de testroute aanpassen (eerst conversation inserten); niet de orchestrator/database/API wijzigen.</li>
+  <li>Testprocedure: <code>npm run dev</code> (localhost:3000) + <code>Invoke-RestMethod -Method POST -Uri "http://localhost:3000/api/customer-zero/test-orchestrator"</code>.</li>
+  <li>Relatie met huidige repo: deze testroute is de ongetrackte map <code>apps/web/app/api/customer-zero/test-orchestrator/</code>; de orchestrator kreeg later dependency injection (commit <code>eec0e6e</code>).</li>
+</ul>
+
+<h2>3. Commercieel funnel-ontwerp</h2>
+<pre>Bezoeker &rarr; AI-assistent &rarr; (informatief: antwoord | commercieel: intent herkennen)
+&rarr; Interesse / Lead / Hoge intent &rarr; Lead kwalificeren &rarr; PostgreSQL/Neon
+&rarr; "Wil je een kennismaking?" &rarr; Ja &rarr; Availability &rarr; Afspraak boeken &rarr; PostgreSQL</pre>
+<p>Leadvelden om meetbaar te maken: <code>source, session_id, company, email, commercial_intent, intent_score, qualification_status, requested_service, conversation_summary, appointment_status, created_at</code>. Doel-funnel: 100 bezoekers &rarr; 32 gesprekken &rarr; 14 intents &rarr; 8 leads &rarr; 5 afspraken &rarr; 2 klanten.</p>
+
+<h2>4. Social &amp; branding (keuzes)</h2>
+<ul>
+  <li><strong>LinkedIn-post</strong> (professioneel, geen AI-plaatjes/emoji): "AIVaultsAI is live", aanbod (AI-assistenten, procesautomatisering, AI-agents, leadopvolging, afspraken/planning, API-integraties, maatwerk), <code>aivaultsai.one</code>, contact + hashtags. Volledige tekst staat in de chat (zie markdown-versie).</li>
+  <li>Post gepubliceerd + TikTok gemaakt; volgende stap: Instagram/Facebook-profielen (naam, bio, CTA, branding, eerste 5 posts).</li>
+  <li><strong>Logo-ontwerp #5</strong> gekozen; LinkedIn/FB-banner gegenereerd.</li>
+</ul>
+
+<h2>5. Werkwijze &amp; praktijk</h2>
+<ul>
+  <li>Protocol: <strong>1 taak &rarr; bouwen &rarr; testen &rarr; controleren &rarr; commit &rarr; pushen</strong>; geen subtaken; volledige bestanden aanleveren i.p.v. diff-fragmenten; eerst oorzaak bewijzen, dan fixen; geen tool-credits veronderstellen (Cursor was op).</li>
+  <li>Omgeving: <code>.ts</code>-bestanden openen in de editor (niet uitvoeren); PowerShell niet "bevroren" houden midden in diff-output; artefacten als <code>ai-newappsweb</code>/<code>ai-new</code> opruimen; e-mails in <code>node_modules</code> zijn package-metadata, geen klanten; lokale API-tests vereisen een draaiende <code>npm run dev</code>.</li>
+</ul>
+
+<h2>6. Volgende stappen (uit de chat)</h2>
+<ol>
+  <li>TASK 01 afronden: testroute werkend (conversation eerst aanmaken) en end-to-end bewijzen: conversation &rarr; orchestrator &rarr; intent &rarr; lead &rarr; PostgreSQL.</li>
+  <li>Funnel meetbaar maken (leadvelden + tracking) en booking koppelen.</li>
+  <li>Instagram/Facebook invullen; naamsbekendheid + klantenwerving.</li>
+</ol>
+
+<p class="meta">Gegenereerd uit de gedeelde chat-payload (react-router-stream gedecodeerd). Geen secrets in dit document. Zie ook <code>docs/reports/customer-zero-launch-session.md</code> (volledige versie) en <code>docs/reports/deepseek-harness-lab.md</code> (aanverwante sessie).</p>
+
+</body>
+</html>
