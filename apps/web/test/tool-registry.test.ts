@@ -39,9 +39,9 @@ test("registry: dubbele tool-id wordt geweigerd (fail-closed)", () => {
   assert.throws(() => registry.register(ASSISTANT_WEBSITE_RESEARCH), /Duplicate tool id/);
 });
 
-test("registry: default catalogus bevat 6 tools, email_send disabled", () => {
+test("registry: default catalogus bevat 11 tools, email_send disabled", () => {
   const registry = createDefaultToolRegistry();
-  assert.equal(registry.list().length, 6);
+  assert.equal(registry.list().length, 11);
   assert.equal(registry.isEnabled("email_send"), false);
   assert.equal(registry.isEnabled("email_draft"), true);
 });
@@ -110,7 +110,7 @@ test("toModelTools: alleen enabled tools, OpenAI-function shape", () => {
 });
 
 test("catalogus: copy-ready specs zijn consistent met de design-docs", () => {
-  assert.equal(TOOL_SPECS.length, 6);
+  assert.equal(TOOL_SPECS.length, 11);
   assert.equal(CALENDAR_READ.riskLevel, "LOW");
   assert.equal(EMAIL_DRAFT.permissions[0], "EMAIL_DRAFT");
   assert.equal(EMAIL_SEND.permissions[0], "EMAIL_SEND");

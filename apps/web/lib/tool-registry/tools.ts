@@ -6,6 +6,7 @@
  */
 
 import { createToolRegistryV2, type ToolRegistryV2 } from "./registry.ts";
+import type { DiscoveryAgent } from "./discovery.ts";
 import type { ToolSpec } from "./types.ts";
 
 export const ASSISTANT_WEBSITE_RESEARCH: ToolSpec = {
@@ -266,6 +267,186 @@ export const CALENDAR_READ: ToolSpec = {
   keywords: ["calendar", "agenda", "beschikbaarheid", "slots", "afspraak"],
 };
 
+export const EMPLOYEE_DISCOVERY: ToolSpec = {
+  id: "employee_discovery",
+  name: "Employee Discovery",
+  description: "Validateer en dedupliceer kandidaten voor een employee-sessie (geen externe side effect).",
+  version: "1.0.0",
+  category: "WEB",
+  inputSchema: {
+    type: "object",
+    properties: {
+      companies: { type: "array", items: { type: "object" } },
+      limit: { type: "integer", minimum: 1, maximum: 10 },
+    },
+    required: ["companies"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      companies: { type: "array" },
+      rejected: { type: "array" },
+    },
+    required: ["companies", "rejected"],
+  },
+  permissions: ["DATABASE_READ"],
+  class: "READ",
+  riskLevel: "LOW",
+  requiresApproval: false,
+  enabled: true,
+  adapter: "employee-prospect",
+  tenantPolicy: "TENANT",
+  auditEnabled: true,
+  timeoutMs: 5_000,
+  rateLimit: null,
+  keywords: ["discovery", "kandidaten", "dedupe", "prospects"],
+};
+
+export const EMPLOYEE_WEBSITE_RESEARCH: ToolSpec = {
+  id: "employee_website_research",
+  name: "Employee Website Research",
+  description: "Beveiligde website-research + deterministische AI-detectie in één tool (geen fetch zonder detectie-policy).",
+  version: "1.0.0",
+  category: "WEB",
+  inputSchema: {
+    type: "object",
+    properties: {
+      websiteUrl: { type: "string" },
+      domain: { type: "string" },
+    },
+    required: ["websiteUrl", "domain"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      research: { type: "object" },
+      detection: { type: ["object", "null"] },
+    },
+    required: ["research", "detection"],
+  },
+  permissions: ["API_REQUEST"],
+  class: "READ",
+  riskLevel: "MEDIUM",
+  requiresApproval: false,
+  enabled: true,
+  adapter: "employee-research",
+  tenantPolicy: "TENANT",
+  auditEnabled: true,
+  timeoutMs: 30_000,
+  rateLimit: { max: 60, windowMs: 60_000 },
+  keywords: ["website", "research", "onderzoek", "url"],
+};
+
+export const EMPLOYEE_QUALIFY: ToolSpec = {
+  id: "employee_qualify",
+  name: "Employee Qualify",
+  description: "Bestaande prospect-scoring + route-matching (deterministisch, geen tweede engine).",
+  version: "1.0.0",
+  category: "AI",
+  inputSchema: {
+    type: "object",
+    properties: {
+      prospect: { type: "object" },
+      intelligence: { type: "object" },
+    },
+    required: ["prospect", "intelligence"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      score: { type: "object" },
+      route: { type: "string" },
+    },
+    required: ["score", "route"],
+  },
+  permissions: ["DATABASE_READ"],
+  class: "READ",
+  riskLevel: "LOW",
+  requiresApproval: false,
+  enabled: true,
+  adapter: "employee-prospect",
+  tenantPolicy: "TENANT",
+  auditEnabled: true,
+  timeoutMs: 5_000,
+  rateLimit: null,
+  keywords: ["qualify", "kwalificatie", "score", "scoring", "prospect"],
+};
+
+export const EMPLOYEE_DATABASE_READ: ToolSpec = {
+  id: "employee_database_read",
+  name: "Employee Database Read",
+  description: "Lees employee-run-data (opgeslagen research/kandidaten) — interne DB-toegang via de registry.",
+  version: "1.0.0",
+  category: "DATABASE",
+  inputSchema: { type: "object", properties: { domain: { type: "string" } }, required: ["domain"] },
+  outputSchema: { type: "object" },
+  permissions: ["DATABASE_READ"],
+  class: "READ",
+  riskLevel: "MEDIUM",
+  requiresApproval: false,
+  enabled: true,
+  adapter: "employee-db",
+  tenantPolicy: "TENANT",
+  auditEnabled: true,
+  timeoutMs: 5_000,
+  rateLimit: null,
+  keywords: ["database", "db", "lezen"],
+};
+
+export const EMPLOYEE_DATABASE_WRITE: ToolSpec = {
+  id: "employee_database_write",
+  name: "Employee Database Write",
+  description: "Persisteer employee-run-data (upsert company/research) — interne DB-toegang via de registry.",
+  version: "1.0.0",
+  category: "DATABASE",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      domain: { type: "string" },
+      discoverySource: { type: "string" },
+    },
+    required: ["name", "domain", "discoverySource"],
+    additionalProperties: false,
+  },
+  outputSchema: { type: "object" },
+  permissions: ["DATABASE_WRITE"],
+  class: "WRITE",
+  riskLevel: "MEDIUM",
+  requiresApproval: false,
+  enabled: true,
+  adapter: "employee-db",
+  tenantPolicy: "TENANT",
+  auditEnabled: true,
+  timeoutMs: 5_000,
+  rateLimit: null,
+  keywords: ["database", "db", "schrijven", "opslaan"],
+};
+
+/**
+ * Employee-agent-definitie (TASK 15 §4): de vastgelegde tool-set van de
+ * Autonomous Employee. email_send staat er BEWUST niet in (dubbel slot:
+ * prohibitedPermissions + niet in allowedTools) — alleen via approval-poort.
+ */
+export const EMPLOYEE_ALLOWED_TOOLS: readonly string[] = [
+  "employee_discovery",
+  "employee_website_research",
+  "employee_qualify",
+  "employee_database_read",
+  "employee_database_write",
+  "email_draft", // centrale draft-tool (TASK 18 vervangt employee_outreach_draft)
+];
+
+export const EMPLOYEE_AGENT: DiscoveryAgent = {
+  id: "autonomous-employee",
+  riskLevel: "MEDIUM",
+  allowedTools: EMPLOYEE_ALLOWED_TOOLS,
+  allowedPermissions: ["API_REQUEST", "DATABASE_READ", "DATABASE_WRITE", "EMAIL_DRAFT"],
+};
+
 /** Volledige catalogus — registratievolgorde = stabiele lijstvolgorde. */
 export const TOOL_SPECS: readonly ToolSpec[] = [
   ASSISTANT_WEBSITE_RESEARCH,
@@ -274,6 +455,11 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
   CONTACT_SEARCH,
   LEAD_READ,
   CALENDAR_READ,
+  EMPLOYEE_DISCOVERY,
+  EMPLOYEE_WEBSITE_RESEARCH,
+  EMPLOYEE_QUALIFY,
+  EMPLOYEE_DATABASE_READ,
+  EMPLOYEE_DATABASE_WRITE,
 ];
 
 export function createDefaultToolRegistry(): ToolRegistryV2 {

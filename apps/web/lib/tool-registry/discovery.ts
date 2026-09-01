@@ -30,6 +30,7 @@ const MIN_SCORE = 1;
 
 /** Minimale agent-gegevens voor de discovery-filters (allowedTools/permissions/max_risk). */
 export interface DiscoveryAgent {
+  readonly id?: string; // label (bv. "autonomous-employee"); filters komen uit de velden hieronder
   readonly allowedTools?: readonly string[];
   readonly allowedPermissions?: readonly string[];
   readonly riskLevel?: RiskLevel;

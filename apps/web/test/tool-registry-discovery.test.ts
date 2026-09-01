@@ -18,14 +18,14 @@ test("normalizeIntent: lowercase, tokens, stopwoorden eruit", () => {
   assert.deepEqual(normalizeIntent("de het een en of"), []);
 });
 
-test("discovery: relevante intent vindt de juiste tool", () => {
+test("discovery: relevante intent vindt de juiste tools", () => {
   const result = discoverTools(
     { intent: "Ik wil websites onderzoeken", agentId: "assistant" },
     DEFAULT_REGISTRY,
   );
   assert.deepEqual(
     result.tools.map((tool) => tool.id),
-    ["assistant_website_research"],
+    ["assistant_website_research", "employee_website_research"],
   );
   assert.deepEqual(result.matchedCategories, ["WEB"]);
   assert.equal(result.truncated, false);
