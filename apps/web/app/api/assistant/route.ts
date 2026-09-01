@@ -12,6 +12,11 @@ import {
   parseAssistantRequest,
 } from "@/lib/assistant/request";
 import {
+  ASSISTANT_TOOLS,
+  runAssistantToolLoop,
+} from "@/lib/assistant/tool-loop";
+import { executeAssistantToolCall } from "@/lib/agent-runtime/runtime-adapter";
+import {
   createDefaultFunnelDeps,
   maybeRunCustomerZeroOrchestration,
 } from "@/lib/customer-zero/assistant-funnel";
@@ -87,50 +92,6 @@ function clientIp(request: Request): string {
     if (first) return first;
   }
   return request.headers.get("x-real-ip") ?? "unknown";
-}
-
-function extractText(data: unknown): string {
-  if (!data || typeof data !== "object") {
-    return "";
-  }
-
-  const response = data as {
-    output_text?: unknown;
-    output?: unknown;
-  };
-
-  if (typeof response.output_text === "string") {
-    return response.output_text.trim();
-  }
-
-  if (!Array.isArray(response.output)) {
-    return "";
-  }
-
-  return response.output
-    .flatMap((item) => {
-      if (!item || typeof item !== "object") {
-        return [];
-      }
-
-      const content = (item as { content?: unknown }).content;
-
-      if (!Array.isArray(content)) {
-        return [];
-      }
-
-      return content.flatMap((part) => {
-        if (!part || typeof part !== "object") {
-          return [];
-        }
-
-        const text = (part as { text?: unknown }).text;
-
-        return typeof text === "string" ? [text] : [];
-      });
-    })
-    .join("\n")
-    .trim();
 }
 
 function getDatabase() {
@@ -403,72 +364,89 @@ export async function POST(request: Request) {
 
     /*
      * ----------------------------------------------------------
-     * 7. Ask OpenAI with bounded context and a hard timeout.
+     * 7. Ask OpenAI with bounded context, a hard timeout, and ONE
+     *    controlled tool (assistant_website_research). Tool calls are
+     *    executed through the EXISTING Agent Runtime bridge (policy ->
+     *    execution gate -> HTTP adapter -> evidence) in a bounded loop of
+     *    at most two rounds; the model never fetches anything itself.
      * ----------------------------------------------------------
      */
 
     const modelInput = buildModelInput(history, message);
 
-    let upstream: Response;
-    try {
-      upstream = await fetch(
-        "https://api.openai.com/v1/responses",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
+    type ModelCallResult =
+      | { ok: true; data: unknown }
+      | { ok: false; status: number; error: string };
+
+    const callModel = async (input: unknown[]): Promise<ModelCallResult> => {
+      try {
+        const upstream = await fetch(
+          "https://api.openai.com/v1/responses",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model:
+                process.env.OPENAI_ASSISTANT_MODEL ||
+                "gpt-5.6-luna",
+              instructions: SYSTEM_PROMPT,
+              input,
+              max_output_tokens: MAX_OUTPUT_TOKENS,
+              tools: ASSISTANT_TOOLS,
+            }),
+            signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
           },
-          body: JSON.stringify({
-            model:
-              process.env.OPENAI_ASSISTANT_MODEL ||
-              "gpt-5.6-luna",
-            instructions: SYSTEM_PROMPT,
-            input: modelInput,
-            max_output_tokens: MAX_OUTPUT_TOKENS,
-          }),
-          signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
-        },
-      );
-    } catch (error) {
-      const name = error instanceof Error ? error.name : "unknown";
-      const timedOut = name === "TimeoutError";
-      console.error(
-        "assistant: OpenAI request failed",
-        timedOut ? "timeout" : name,
-      );
-      return NextResponse.json(
-        {
+        );
+
+        if (!upstream.ok) {
+          console.error(
+            "assistant: OpenAI upstream error",
+            upstream.status,
+          );
+          return {
+            ok: false,
+            status: 502,
+            error:
+              "De AI-assistent is tijdelijk niet beschikbaar. Probeer het zo opnieuw.",
+          };
+        }
+        return { ok: true, data: (await upstream.json()) as unknown };
+      } catch (error) {
+        const name = error instanceof Error ? error.name : "unknown";
+        const timedOut = name === "TimeoutError";
+        console.error(
+          "assistant: OpenAI request failed",
+          timedOut ? "timeout" : name,
+        );
+        return {
+          ok: false,
+          status: timedOut ? 504 : 502,
           error: timedOut
             ? "De AI-assistent reageert niet op tijd. Probeer het opnieuw."
             : "De AI-assistent is tijdelijk niet bereikbaar. Probeer het opnieuw.",
-        },
-        {
-          status: timedOut ? 504 : 502,
-        },
-      );
-    }
+        };
+      }
+    };
 
-    if (!upstream.ok) {
-      console.error(
-        "assistant: OpenAI upstream error",
-        upstream.status,
-      );
+    const first = await callModel(modelInput);
+    if (!first.ok) {
       return NextResponse.json(
-        {
-          error:
-            "De AI-assistent is tijdelijk niet beschikbaar. Probeer het zo opnieuw.",
-          conversationId: resolvedConversationId,
-        },
-        {
-          status: 502,
-        },
+        { error: first.error, conversationId: resolvedConversationId },
+        { status: first.status },
       );
     }
 
-    const data = (await upstream.json()) as unknown;
-
-    const assistantMessage = extractText(data);
+    const loopResult = await runAssistantToolLoop({
+      history,
+      message,
+      firstResponse: first.data,
+      modelCall: callModel,
+      executeTool: (call) => executeAssistantToolCall(call),
+    });
+    const assistantMessage = loopResult.text;
 
     if (!assistantMessage) {
       return NextResponse.json(
