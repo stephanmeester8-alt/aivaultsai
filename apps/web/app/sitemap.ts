@@ -23,6 +23,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: `${SITE_URL}/ai-assistent`,
+      lastModified: new Date("2026-09-02"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
       url: `${SITE_URL}/leadautomatisering`,
       lastModified,
       changeFrequency: "monthly",
