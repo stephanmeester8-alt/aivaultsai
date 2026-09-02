@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   "EMAIL_SEND",
   "CRM_READ",
   "CRM_WRITE",
+  "CALENDAR_READ",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
