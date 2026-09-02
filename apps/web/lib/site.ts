@@ -15,6 +15,7 @@ export const SITE_DESCRIPTION =
 export const NAV = [
   { href: "/websites", label: "Websites" },
   { href: "/ai-assistenten", label: "AI-assistenten" },
+  { href: "/ai-assistent", label: "Assistent + cursus" },
   { href: "/leadautomatisering", label: "Automatisering" },
   { href: "/#pricing", label: "Aanbod" },
   { href: "/#faq", label: "FAQ" },
@@ -23,6 +24,7 @@ export const NAV = [
 export const FOOTER_LINKS = [
   { href: "/websites", label: "Websites" },
   { href: "/ai-assistenten", label: "AI-assistenten" },
+  { href: "/ai-assistent", label: "Assistent + cursus" },
   { href: "/leadautomatisering", label: "Leadautomatisering" },
   { href: "/#pricing", label: "Aanbod" },
   { href: "/#faq", label: "FAQ" },
