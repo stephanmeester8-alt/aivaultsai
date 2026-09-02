@@ -30,10 +30,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * Product-JSON-LD ZONDER prijs/offers: de prijs is exclusief btw (geen
- * eenduidige schema.org-weergave) en prijzen in structured data driften.
- * Naam en beschrijving zijn verifieerbaar; meer wordt niet beweerd.
- * (Zelfde filosofie als SERVICES_SCHEMA in lib/site.ts.)
+ * Product-JSON-LD met één correcte Offer (vereist door Google Product
+ * rich results): €249,00 eenmalig, EUR, InStock. Geen review of
+ * aggregateRating (er bestaan geen beoordelingen — geen fakes). Geen
+ * priceValidUntil (geen geldige einddatum: het aanbod is doorlopend).
+ * De prijs op de pagina is exclusief btw; schema.org Offer heeft geen
+ * eenduidig excl-btw-veld, dus price = 249.00 zoals het aanbod luidt.
  */
 const PRODUCT_SCHEMA = {
   "@context": "https://schema.org",
@@ -41,6 +43,14 @@ const PRODUCT_SCHEMA = {
   name: "AI-assistent + cursus + persoonlijke onboarding",
   description: HERO.lead,
   brand: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+  offers: {
+    "@type": "Offer",
+    url: `${SITE_URL}/ai-assistent`,
+    price: "249.00",
+    priceCurrency: "EUR",
+    availability: "https://schema.org/InStock",
+    seller: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+  },
 } as const;
 
 const FAQ_SCHEMA = {
