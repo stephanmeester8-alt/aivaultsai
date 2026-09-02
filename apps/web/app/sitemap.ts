@@ -29,6 +29,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      url: `${SITE_URL}/shop`,
+      lastModified: new Date("2026-09-02"),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE_URL}/shop/ai-assistent-pakket`,
+      lastModified: new Date("2026-09-02"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
       url: `${SITE_URL}/leadautomatisering`,
       lastModified,
       changeFrequency: "monthly",

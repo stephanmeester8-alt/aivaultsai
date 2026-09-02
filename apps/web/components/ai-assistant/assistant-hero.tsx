@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Container } from "@/components/container";
 
 import { HERO, PRICE } from "./assistant-offer-data";
@@ -17,18 +19,18 @@ export function AssistantHero() {
         <p className="mt-6 max-w-3xl text-base leading-relaxed text-mute sm:text-xl">{HERO.lead}</p>
 
         <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <a
+          <Link
             href={HERO.ctaHref}
             className="inline-flex items-center justify-center rounded-sm bg-ink px-5 py-3 text-sm font-medium text-canvas no-underline hover:bg-gold"
           >
             {HERO.ctaLabel} →
-          </a>
-          <a
+          </Link>
+          <Link
             href={HERO.secondaryHref}
             className="inline-flex items-center justify-center rounded-sm border border-line px-5 py-3 text-sm font-medium text-ink no-underline hover:border-gold/60"
           >
             {HERO.secondaryLabel}
-          </a>
+          </Link>
         </div>
 
         <p className="mt-8 font-mono text-xl text-gold sm:text-2xl">

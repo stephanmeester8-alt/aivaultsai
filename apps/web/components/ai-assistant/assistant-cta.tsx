@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Container } from "@/components/container";
 
 import { CTA, PRICE } from "./assistant-offer-data";
@@ -19,12 +21,12 @@ export function AssistantCta() {
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4">
-          <a
+          <Link
             href={CTA.href}
             className="inline-flex items-center justify-center rounded-sm bg-ink px-7 py-4 text-base font-medium text-canvas no-underline hover:bg-gold"
           >
             {CTA.label} →
-          </a>
+          </Link>
           <p className="font-mono text-lg text-gold">
             {PRICE.amount} <span className="text-mute">{PRICE.taxNote}</span>
             <span className="mx-2 text-faint">·</span>

@@ -20,9 +20,8 @@ export const PRICE = {
 export const DISCLAIMER =
   "Testversie — tijdens het integreren van updates kunnen functies tijdelijk niet beschikbaar zijn.";
 
-/** CTA-doel: bestaand contactpad van de site (geen betaalintegratie aanwezig). */
-export const OFFER_CTA_HREF =
-  "https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=AI-assistent%20pakket%20%E2%82%AC249";
+/** CTA-doel: de webshop-productpagina (beveiligde checkout via Stripe). */
+export const OFFER_CTA_HREF = "/shop/ai-assistent-pakket";
 
 export const OFFER_CTA_LABEL = "Start met mijn AI-assistent";
 
