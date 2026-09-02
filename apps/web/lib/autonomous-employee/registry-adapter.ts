@@ -95,10 +95,12 @@ export function executeEmployeeTool(
     });
   }
   if (!registry.isEnabled(toolId, ctx.tenantId)) {
+    // TASK 25: rij = OFF → TENANT_POLICY (fail-closed DENY); anders disabled.
+    const reason = registry.isTenantPolicyOff(toolId, ctx.tenantId) ? "TENANT_POLICY" : "TOOL_DISABLED";
     return Promise.resolve({
       ok: false,
-      error: "TOOL_DISABLED",
-      policy: { toolId, allowed: false, reason: "TOOL_DISABLED" },
+      error: reason,
+      policy: { toolId, allowed: false, reason },
     });
   }
   if (registry.resolveAdapter(toolId) === null) {

@@ -14,6 +14,7 @@
 
 import { assertValidToolSpec } from "./validation.ts";
 import type { ToolSpec } from "./types.ts";
+import { resolveTenantToolPolicy, type TenantPolicyRow } from "./tenant-policy.ts";
 
 export interface ModelToolDefinition {
   type: "function";
@@ -31,14 +32,24 @@ export interface ToolRegistryV2Options {
    * spec.enabled leidend; tenantPolicy OFF wint altijd.
    */
   enabledOverrides?: Readonly<Record<string, boolean>>;
+
+  /**
+   * Tenant-policy-resolver (TASK 25): sync lookup naar een geladen
+   * tenant_tool_policies-rij (data-laag: loadTenantToolPolicies). Zonder
+   * resolver (of zonder tenantId) blijft het gedrag spec-gedreven —
+   * backwards compatible. Rij = OFF wint altijd (fail-closed).
+   */
+  tenantPolicyResolver?: (tenantId: string, toolId: string) => TenantPolicyRow | null;
 }
 
 export class ToolRegistryV2 {
   readonly #tools = new Map<string, ToolSpec>();
   readonly #overrides: Readonly<Record<string, boolean>>;
+  readonly #policyResolver: ((tenantId: string, toolId: string) => TenantPolicyRow | null) | null;
 
   constructor(options: ToolRegistryV2Options = {}) {
     this.#overrides = options.enabledOverrides ?? {};
+    this.#policyResolver = options.tenantPolicyResolver ?? null;
   }
 
   register(spec: ToolSpec): void {
@@ -64,13 +75,17 @@ export class ToolRegistryV2 {
 
   /**
    * Fail-closed: onbekende tool, disabled tool of tenantPolicy OFF → false.
-   * tenantId is de TASK 25-hook (per-tenant overrides); zonder data-laag
-   * is het gedrag spec-gedreven + expliciete enabledOverrides.
+   * Met tenantId + tenantPolicyResolver (TASK 25) wint de tenant-rij
+   * (OFF → altijd uit; ON/APPROVAL → spec-default risk-based); zonder
+   * tenant-rij of zonder resolver is het gedrag spec-gedreven +
+   * expliciete enabledOverrides.
    */
   isEnabled(id: string, tenantId?: string): boolean {
-    void tenantId; // TASK 25-hook: per-tenant overrides; vandaag spec-gedreven
     const spec = this.#tools.get(id);
     if (!spec) return false;
+    if (tenantId && this.#policyResolver) {
+      return resolveTenantToolPolicy(spec, this.#policyResolver(tenantId, id)).enabled;
+    }
     if (spec.tenantPolicy === "OFF") return false; // OFF wint altijd
     const enabled = this.#overrides[id] ?? spec.enabled;
     return enabled;
@@ -78,15 +93,33 @@ export class ToolRegistryV2 {
 
   /**
    * Approval vereist bij HIGH/CRITICAL (risk) óf tenantPolicy APPROVAL.
+   * Met tenantId + tenantPolicyResolver (TASK 25) beslist de tenant-rij
+   * (APPROVAL → ook MEDIUM; OFF → nooit approval, tool bestaat niet).
    * Fail-closed: onbekende tool → false (wordt door isEnabled al DENY).
    */
   approvalRequired(id: string, tenantId?: string): boolean {
-    void tenantId; // TASK 25-hook: per-tenant overrides; vandaag spec-gedreven
     const spec = this.#tools.get(id);
     if (!spec) return false;
+    if (tenantId && this.#policyResolver) {
+      return resolveTenantToolPolicy(spec, this.#policyResolver(tenantId, id)).approvalRequired;
+    }
     if (spec.riskLevel === "HIGH" || spec.riskLevel === "CRITICAL") return true;
     if (spec.tenantPolicy === "APPROVAL") return true;
     return spec.requiresApproval;
+  }
+
+  /**
+   * Expliciete tenant-policy OFF (spec.tenantPolicy of tenant-rij)? De gate
+   * retourneert dan TENANT_POLICY i.p.v. TOOL_DISABLED (TASK 25 §6).
+   * Onbekende tool → false (wordt door get() elders UNKNOWN_TOOL).
+   */
+  isTenantPolicyOff(id: string, tenantId?: string): boolean {
+    const spec = this.#tools.get(id);
+    if (!spec) return false;
+    if (tenantId && this.#policyResolver) {
+      return this.#policyResolver(tenantId, id)?.policy === "OFF";
+    }
+    return spec.tenantPolicy === "OFF";
   }
 
   /**
