@@ -72,7 +72,7 @@ function parseISODate(value: string): Date | null {
 }
 
 /** IANA-timezone-validatie via Intl: ongeldige naam gooit RangeError. */
-function isValidTimezone(value: string): boolean {
+export function isValidTimezone(value: string): boolean {
   if (value.length === 0 || value.length > TIMEZONE_MAX) return false;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value });

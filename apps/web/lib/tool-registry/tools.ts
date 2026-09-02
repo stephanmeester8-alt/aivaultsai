@@ -400,6 +400,131 @@ export const LEAD_UPDATE: ToolSpec = {
   keywords: ["crm", "lead", "update", "wijzigen"],
 };
 
+// ---- Calendar write (TASK 23): approval verplicht, idempotentie via dedupeKey ----
+
+const CALENDAR_WRITE_BASE = {
+  category: "CALENDAR" as const,
+  class: "WRITE" as const,
+  requiresApproval: true, // cancel: HIGH (altijd); create/update: fail-closed default tot TASK 25
+  enabled: true, // adapter ontbreekt → NOT_IMPLEMENTED
+  adapter: "calendar-write",
+  tenantPolicy: "APPROVAL" as const,
+  auditEnabled: true,
+  timeoutMs: 10_000,
+  rateLimit: { max: 20, windowMs: 60_000 },
+};
+
+export const CALENDAR_CREATE: ToolSpec = {
+  ...CALENDAR_WRITE_BASE,
+  id: "calendar_create",
+  name: "Calendar Create",
+  description:
+    "Maak een afspraak via de gekoppelde calendar-provider " +
+    "(approval verplicht, idempotent via dedupeKey).",
+  version: "1.0.0",
+  riskLevel: "MEDIUM",
+  inputSchema: {
+    type: "object",
+    properties: {
+      start: { type: "string" }, // ISO-timestamp
+      end: { type: "string" },
+      timezone: { type: "string", maxLength: 64 },
+      contactMethod: { enum: ["phone", "video", "in_person"] },
+      leadId: { type: "string", maxLength: 200 },
+      conversationId: { type: "string", maxLength: 200 },
+      name: { type: "string", maxLength: 200 },
+      email: { type: "string", maxLength: 320 },
+      notes: { type: "string", maxLength: 2000 }, // alleen voor de provider; NIET in audit
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["start", "end", "timezone", "contactMethod", "dedupeKey", "approvalId"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      appointmentId: { type: "string" },
+      status: { enum: ["REQUESTED", "CONFIRMED", "CANCELLED", "FAILED"] },
+      externalCalendarEventId: { type: "string" },
+      created: { type: "boolean" }, // false = bestond al (idempotent)
+    },
+    required: ["appointmentId", "status", "externalCalendarEventId", "created"],
+  },
+  permissions: ["CALENDAR_WRITE"],
+  keywords: ["calendar", "afspraak", "create", "aanmaken", "boeken"],
+};
+
+export const CALENDAR_UPDATE: ToolSpec = {
+  ...CALENDAR_WRITE_BASE,
+  id: "calendar_update",
+  name: "Calendar Update",
+  description:
+    "Wijzig een afspraak via de calendar-provider (approval verplicht, " +
+    "minstens één veld, idempotent). NOT_IMPLEMENTED zolang de provider " +
+    "geen update ondersteunt.",
+  version: "1.0.0",
+  riskLevel: "MEDIUM",
+  inputSchema: {
+    type: "object",
+    properties: {
+      appointmentId: { type: "string", minLength: 1, maxLength: 200 },
+      start: { type: "string" },
+      end: { type: "string" },
+      timezone: { type: "string", maxLength: 64 },
+      contactMethod: { enum: ["phone", "video", "in_person"] },
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["appointmentId", "dedupeKey", "approvalId"],
+    anyOf: [{ required: ["start"] }, { required: ["end"] }, { required: ["timezone"] }, { required: ["contactMethod"] }],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      appointmentId: { type: "string" },
+      status: { enum: ["REQUESTED", "CONFIRMED", "CANCELLED", "FAILED"] },
+      externalCalendarEventId: { type: "string" },
+    },
+    required: ["appointmentId", "status", "externalCalendarEventId"],
+  },
+  permissions: ["CALENDAR_WRITE"],
+  keywords: ["calendar", "afspraak", "update", "wijzigen", "verplaatsen"],
+};
+
+export const CALENDAR_CANCEL: ToolSpec = {
+  ...CALENDAR_WRITE_BASE,
+  id: "calendar_cancel",
+  name: "Calendar Cancel",
+  description:
+    "Annuleer een afspraak (HIGH + approval ALTIJD, definitief, " +
+    "idempotent via dedupeKey; dubbel cancel → DENY).",
+  version: "1.0.0",
+  riskLevel: "HIGH",
+  inputSchema: {
+    type: "object",
+    properties: {
+      appointmentId: { type: "string", minLength: 1, maxLength: 200 },
+      reason: { type: "string", maxLength: 200 },
+      dedupeKey: { type: "string", maxLength: 200 },
+      approvalId: { type: "string", minLength: 1, maxLength: 200 },
+    },
+    required: ["appointmentId", "dedupeKey", "approvalId"],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      appointmentId: { type: "string" },
+      status: { enum: ["CANCELLED"] },
+    },
+    required: ["appointmentId", "status"],
+  },
+  permissions: ["CALENDAR_WRITE"],
+  keywords: ["calendar", "afspraak", "cancel", "annuleren"],
+};
+
 export const EMPLOYEE_DISCOVERY: ToolSpec = {
   id: "employee_discovery",
   name: "Employee Discovery",
@@ -597,6 +722,9 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
   CONTACT_UPDATE,
   LEAD_CREATE,
   LEAD_UPDATE,
+  CALENDAR_CREATE,
+  CALENDAR_UPDATE,
+  CALENDAR_CANCEL,
 ];
 
 export function createDefaultToolRegistry(): ToolRegistryV2 {

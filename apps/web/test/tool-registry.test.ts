@@ -7,7 +7,10 @@ import {
 } from "../lib/tool-registry/registry.ts";
 import {
   ASSISTANT_WEBSITE_RESEARCH,
+  CALENDAR_CANCEL,
+  CALENDAR_CREATE,
   CALENDAR_READ,
+  CALENDAR_UPDATE,
   CONTACT_SEARCH,
   createDefaultToolRegistry,
   EMAIL_DRAFT,
@@ -39,9 +42,9 @@ test("registry: dubbele tool-id wordt geweigerd (fail-closed)", () => {
   assert.throws(() => registry.register(ASSISTANT_WEBSITE_RESEARCH), /Duplicate tool id/);
 });
 
-test("registry: default catalogus bevat 15 tools, email_send disabled", () => {
+test("registry: default catalogus bevat 18 tools, email_send disabled", () => {
   const registry = createDefaultToolRegistry();
-  assert.equal(registry.list().length, 15);
+  assert.equal(registry.list().length, 18);
   assert.equal(registry.isEnabled("email_send"), false);
   assert.equal(registry.isEnabled("email_draft"), true);
 });
@@ -110,13 +113,17 @@ test("toModelTools: alleen enabled tools, OpenAI-function shape", () => {
 });
 
 test("catalogus: copy-ready specs zijn consistent met de design-docs", () => {
-  assert.equal(TOOL_SPECS.length, 15);
+  assert.equal(TOOL_SPECS.length, 18);
   assert.equal(CALENDAR_READ.riskLevel, "LOW");
   assert.equal(EMAIL_DRAFT.permissions[0], "EMAIL_DRAFT");
   assert.equal(EMAIL_SEND.permissions[0], "EMAIL_SEND");
   assert.equal(CONTACT_SEARCH.permissions[0], "CRM_READ");
   assert.equal(LEAD_READ.permissions[0], "CRM_READ");
   assert.equal(CALENDAR_READ.permissions[0], "CALENDAR_READ");
+  assert.equal(CALENDAR_CREATE.permissions[0], "CALENDAR_WRITE");
+  assert.equal(CALENDAR_UPDATE.permissions[0], "CALENDAR_WRITE");
+  assert.equal(CALENDAR_CANCEL.permissions[0], "CALENDAR_WRITE");
+  assert.equal(CALENDAR_CANCEL.riskLevel, "HIGH"); // cancel = HIGH → approval altijd
   assert.equal(EMAIL_SEND.requiresApproval, true);
   assert.equal(EMAIL_SEND.tenantPolicy, "APPROVAL");
   assert.equal(CALENDAR_READ.rateLimit?.max, 60);
