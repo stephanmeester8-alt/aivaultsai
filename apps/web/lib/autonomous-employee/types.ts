@@ -84,6 +84,8 @@ export interface EmployeeToolContext {
   analyze?: (input: import("../prospect-run/types.ts").ProspectInput) => Promise<import("../prospect-run/types.ts").ProspectIntelligence>;
   now?: () => string;
   log?: (message: string) => void;
+  /** TASK 24: observability-only recorder (optioneel; no-op zonder). */
+  recorder?: import("../observability/metrics.ts").MetricRecorder;
 }
 
 export interface EmployeeWorkSessionRecord {

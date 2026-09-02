@@ -24,6 +24,20 @@ function fakeSql(): { sql: ObservabilitySql; inserts: { query: string; values: u
   return { sql, inserts };
 }
 
+/** Volledige MetricRecorder-fake (contract TASK 24: alle counters no-op). */
+function collectingRecorder(records: ToolCallRecord[]): MetricRecorder {
+  return {
+    recordCall: (r) => void records.push(r),
+    recordDiscovery: () => {},
+    recordApprovalPending: () => {},
+    recordApprovalRejected: () => {},
+    recordBudgetExceeded: () => {},
+    recordAgentStep: () => {},
+    recordExternalRequest: () => {},
+    recordAgentCost: () => {},
+  };
+}
+
 function baseRecord(overrides: Partial<ToolCallRecord> = {}): ToolCallRecord {
   return {
     executionId: "ex-1",
@@ -142,7 +156,7 @@ test("observability: approval/budget/discovery/cost counters", async () => {
 
 test("recordedCall: ALLOWED outcome → record met status ALLOWED + unieke executionId (concurrent)", async () => {
   const records: ToolCallRecord[] = [];
-  const recorder: MetricRecorder = { recordCall: (r) => void records.push(r), recordDiscovery: () => {} };
+  const recorder = collectingRecorder(records);
   const now = () => "2026-09-01T08:00:00.000Z";
   const options = {
     tenantId: TENANT_ID,
@@ -174,7 +188,7 @@ test("recordedCall: ALLOWED outcome → record met status ALLOWED + unieke execu
 
 test("recordedCall: status-bepaling DENIED / NOT_IMPLEMENTED / ERROR", async () => {
   const records: ToolCallRecord[] = [];
-  const recorder: MetricRecorder = { recordCall: (r) => void records.push(r), recordDiscovery: () => {} };
+  const recorder = collectingRecorder(records);
   const options = {
     tenantId: TENANT_ID,
     agentId: "a",
@@ -191,7 +205,7 @@ test("recordedCall: status-bepaling DENIED / NOT_IMPLEMENTED / ERROR", async () 
 
 test("recordedCall: TIMEOUT → status TIMEOUT; onverwachte throw → ERROR", async () => {
   const records: ToolCallRecord[] = [];
-  const recorder: MetricRecorder = { recordCall: (r) => void records.push(r), recordDiscovery: () => {} };
+  const recorder = collectingRecorder(records);
   const options = {
     tenantId: TENANT_ID,
     agentId: "a",
@@ -230,6 +244,12 @@ test("recordedCall: recorder-fout wordt geslikt (non-fatal) en zonder recorder i
       throw new Error("recorder kapot");
     },
     recordDiscovery: () => {},
+    recordApprovalPending: () => {},
+    recordApprovalRejected: () => {},
+    recordBudgetExceeded: () => {},
+    recordAgentStep: () => {},
+    recordExternalRequest: () => {},
+    recordAgentCost: () => {},
   };
   const result = await recordedCall(
     throwing,
@@ -255,7 +275,7 @@ test("recordedCall: recorder-fout wordt geslikt (non-fatal) en zonder recorder i
 
 test("observability: secrets nooit in record — alleen argumentsHash + compacte summary", async () => {
   const records: ToolCallRecord[] = [];
-  const recorder: MetricRecorder = { recordCall: (r) => void records.push(r), recordDiscovery: () => {} };
+  const recorder = collectingRecorder(records);
   await recordedCall(
     recorder,
     {

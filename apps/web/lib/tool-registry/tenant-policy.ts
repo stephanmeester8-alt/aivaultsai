@@ -33,12 +33,24 @@ export function resolveTenantToolPolicy(
   spec: ToolSpec,
   row: TenantPolicyRow | null,
 ): ResolvedToolPolicy {
-  const policy: TenantPolicyValue | "TENANT" = row?.policy ?? spec.tenantPolicy;
-  if (policy === "OFF") return { enabled: false, approvalRequired: false }; // OFF wint
+  // OFF wint altijd (spec of rij): de tool bestaat niet voor deze tenant.
+  if (row?.policy === "OFF" || spec.tenantPolicy === "OFF") {
+    return { enabled: false, approvalRequired: false };
+  }
   const riskApproval = spec.riskLevel === "HIGH" || spec.riskLevel === "CRITICAL";
+  if (row) {
+    // Expliciete operator-rij: ON/APPROVAL schakelt de tool in voor deze
+    // tenant (operator-keuze; approval volgt risk/APPROVAL).
+    return {
+      enabled: true,
+      approvalRequired: riskApproval || row.policy === "APPROVAL",
+    };
+  }
+  // Geen rij → spec-default (fail-closed, backwards compatible): bestaande
+  // tenants gedragen zich exact als vandaag tot een operator een rij schrijft.
   return {
-    enabled: true,
-    approvalRequired: riskApproval || policy === "APPROVAL", // APPROVAL → ook MEDIUM
+    enabled: spec.enabled,
+    approvalRequired: riskApproval || spec.tenantPolicy === "APPROVAL" || spec.requiresApproval,
   };
 }
 

@@ -8,10 +8,17 @@
  *
  * Fail-closed:
  * - onbekende tool (niet in registry)      → DENY (UNKNOWN_TOOL)
- * - disabled tool / tenantPolicy OFF       → DENY (TOOL_DISABLED)
+ * - disabled tool / tenantPolicy OFF       → DENY (TOOL_DISABLED / TENANT_POLICY)
  * - adapter ontbreekt of handler ontbreekt → NOT_IMPLEMENTED
+ * - budget (TASK 16): check vóór de call; budget op = STOP (fail-closed)
  * - handler-fout                            → gecontroleerde fout (geen retry)
+ *
+ * Observability (TASK 24): ELKE call (ALLOWED/DENIED/NOT_IMPLEMENTED/ERROR)
+ * levert één tool-call-record via ctx.recorder (optioneel; no-op zonder).
+ * Budget-stop telt ook agent_budget_exceeded_total.
  */
+
+import { createHash, randomUUID } from "node:crypto";
 
 import type { ToolRegistryV2 } from "../tool-registry/registry.ts";
 import { executeEmailDraft } from "../tool-registry/adapters/email-draft.ts";
@@ -79,6 +86,10 @@ function makeEmployeeToolHandlers(tracker?: EmployeeBudgetTracker): Readonly<
   };
 }
 
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 export function executeEmployeeTool(
   toolId: string,
   input: unknown,
@@ -87,66 +98,117 @@ export function executeEmployeeTool(
   tracker?: EmployeeBudgetTracker,
 ): Promise<EmployeeToolExecution> {
   const spec = registry.get(toolId);
-  if (!spec) {
-    return Promise.resolve({
-      ok: false,
-      error: "UNKNOWN_TOOL",
-      policy: { toolId, allowed: false, reason: "UNKNOWN_TOOL" },
-    });
-  }
-  if (!registry.isEnabled(toolId, ctx.tenantId)) {
-    // TASK 25: rij = OFF → TENANT_POLICY (fail-closed DENY); anders disabled.
-    const reason = registry.isTenantPolicyOff(toolId, ctx.tenantId) ? "TENANT_POLICY" : "TOOL_DISABLED";
-    return Promise.resolve({
-      ok: false,
-      error: reason,
-      policy: { toolId, allowed: false, reason },
-    });
-  }
-  if (registry.resolveAdapter(toolId) === null) {
-    return Promise.resolve({
-      ok: false,
-      error: "NOT_IMPLEMENTED",
-      policy: { toolId, allowed: false, reason: "NOT_IMPLEMENTED" },
-    });
-  }
 
-  // Budget (TASK 16): check vóór de call; budget op = STOP (fail-closed).
-  if (tracker) {
-    const check = tracker.check();
-    if (!check.ok) {
-      return Promise.resolve({
+  // Fail-closed keten + observability: elke uitkomst wordt geregistreerd
+  // (TASK 24) — non-fatal: een recorder-fout verandert nooit de beslissing.
+  const run = async (): Promise<EmployeeToolExecution> => {
+    if (!spec) {
+      return {
         ok: false,
-        error: "BUDGET_EXCEEDED",
-        policy: {
-          toolId,
-          allowed: false,
-          reason: `BUDGET_EXCEEDED:${check.field}`,
-        },
-      });
+        error: "UNKNOWN_TOOL",
+        policy: { toolId, allowed: false, reason: "UNKNOWN_TOOL" },
+      };
     }
-    // Elke poging telt (ook als de handler daarna DENY'd) — anti-loop.
-    tracker.recordToolCall(toolId);
-  }
+    if (!registry.isEnabled(toolId, ctx.tenantId)) {
+      // TASK 25: rij = OFF → TENANT_POLICY (fail-closed DENY); anders disabled.
+      const reason = registry.isTenantPolicyOff(toolId, ctx.tenantId) ? "TENANT_POLICY" : "TOOL_DISABLED";
+      return {
+        ok: false,
+        error: reason,
+        policy: { toolId, allowed: false, reason },
+      };
+    }
+    if (registry.resolveAdapter(toolId) === null) {
+      return {
+        ok: false,
+        error: "NOT_IMPLEMENTED",
+        policy: { toolId, allowed: false, reason: "NOT_IMPLEMENTED" },
+      };
+    }
 
-  const handler = makeEmployeeToolHandlers(tracker)[toolId];
-  if (!handler) {
-    // Bekend in de registry met adapter, maar nog niet gebonden → fail-closed.
-    return Promise.resolve({
-      ok: false,
-      error: "NOT_IMPLEMENTED",
-      policy: { toolId, allowed: false, reason: "ADAPTER_NOT_BOUND" },
-    });
-  }
+    // Budget (TASK 16): check vóór de call; budget op = STOP (fail-closed).
+    if (tracker) {
+      const check = tracker.check();
+      if (!check.ok) {
+        try {
+          ctx.recorder?.recordBudgetExceeded("autonomous-employee", check.field);
+        } catch {
+          /* observability-only: nooit in het beslissingspad */
+        }
+        return {
+          ok: false,
+          error: "BUDGET_EXCEEDED",
+          policy: {
+            toolId,
+            allowed: false,
+            reason: `BUDGET_EXCEEDED:${check.field}`,
+          },
+        };
+      }
+      // Elke poging telt (ook als de handler daarna DENY'd) — anti-loop.
+      tracker.recordToolCall(toolId);
+    }
 
-  return handler(input, ctx).then((result) => ({
-    ok: result.ok,
-    value: result.value,
-    error: result.error,
-    policy: {
-      toolId,
-      allowed: result.ok,
-      reason: result.ok ? undefined : result.error,
-    },
-  }));
+    const handler = makeEmployeeToolHandlers(tracker)[toolId];
+    if (!handler) {
+      // Bekend in de registry met adapter, maar nog niet gebonden → fail-closed.
+      return {
+        ok: false,
+        error: "NOT_IMPLEMENTED",
+        policy: { toolId, allowed: false, reason: "ADAPTER_NOT_BOUND" },
+      };
+    }
+
+    const result = await handler(input, ctx);
+    return {
+      ok: result.ok,
+      value: result.value,
+      error: result.error,
+      policy: {
+        toolId,
+        allowed: result.ok,
+        reason: result.ok ? undefined : result.error,
+      },
+    };
+  };
+
+  // Wrap: één ToolCallRecord per call (argumentsHash only — nooit ruwe input).
+  const recorder = ctx.recorder;
+  if (!recorder) return run();
+
+  return run().then((outcome) => {
+    const now = ctx.now ?? (() => new Date().toISOString());
+    const startedAt = now();
+    try {
+      void recorder.recordCall({
+        executionId: randomUUID(),
+        tenantId: ctx.tenantId,
+        agentId: "autonomous-employee",
+        sessionId: null,
+        toolId,
+        argumentsHash: sha256(JSON.stringify(input ?? {})),
+        startedAt,
+        finishedAt: now(),
+        status: outcome.error === "NOT_IMPLEMENTED"
+          ? "NOT_IMPLEMENTED"
+          : outcome.ok
+            ? "ALLOWED"
+            : outcome.error === "UNKNOWN_TOOL" ||
+                outcome.error === "TOOL_DISABLED" ||
+                outcome.error === "TENANT_POLICY" ||
+                outcome.error === "BUDGET_EXCEEDED"
+              ? "DENIED"
+              : "ERROR",
+        riskLevel: spec?.riskLevel ?? "MEDIUM",
+        approvalId: null,
+        resultSummary: outcome.ok ? "ok" : (outcome.error ?? "failed"),
+        errorCode: outcome.ok ? null : (outcome.error ?? "ERROR"),
+        evidenceRefs: [],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[observability] recorder failed (non-fatal): ${message.slice(0, 200)}`);
+    }
+    return outcome;
+  });
 }

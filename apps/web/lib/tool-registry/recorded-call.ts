@@ -23,6 +23,7 @@ import type { RiskLevel } from "./types.ts";
 const DENY_ERRORS = new Set([
   "UNKNOWN_TOOL",
   "TOOL_DISABLED",
+  "TENANT_POLICY", // TASK 25: rij = OFF
   "TENANT_REQUIRED",
   "BUDGET_EXCEEDED",
   "ALREADY_CANCELLED",

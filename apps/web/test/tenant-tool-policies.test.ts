@@ -45,9 +45,10 @@ test("tenant policy: geen rij → spec-default (backwards compatible)", () => {
   // CONTACT_CREATE: MEDIUM + tenantPolicy APPROVAL → approval (spec-default).
   const write = resolveTenantToolPolicy(CONTACT_CREATE, null);
   assert.deepEqual(write, { enabled: true, approvalRequired: true });
-  // EMAIL_SEND: HIGH → approval altijd (risk-based), ook zonder rij.
+  // EMAIL_SEND: HIGH → approval altijd (risk-based), ook zonder rij;
+  // enabled blijft spec-default (fail-closed: send staat nooit automatisch aan).
   const send = resolveTenantToolPolicy(EMAIL_SEND, null);
-  assert.deepEqual(send, { enabled: true, approvalRequired: true });
+  assert.deepEqual(send, { enabled: false, approvalRequired: true });
 });
 
 test("tenant policy: rij ON → beschikbaar; rij OFF → OFF wint (geen approval)", () => {

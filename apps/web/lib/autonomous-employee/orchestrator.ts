@@ -57,6 +57,7 @@ import type {
   WorkSessionStatus,
 } from "./types.ts";
 import type { ProspectIntelligence, ProspectInput } from "../prospect-run/types.ts";
+import type { MetricRecorder } from "../observability/metrics.ts";
 
 export interface EmployeeDeps {
   sql: EmployeeSql;
@@ -66,8 +67,21 @@ export interface EmployeeDeps {
   provider?: EmailProvider;
   /** TASK 17: approval-store (optioneel; zonder store = huidig gedrag). */
   approvals?: EmployeeApprovalStore;
+  /** TASK 24: observability-only recorder (optioneel; no-op zonder). */
+  recorder?: MetricRecorder;
   now?: () => string;
   log?: (message: string) => void;
+}
+
+/** Observability-only: recorder-fouten worden gelogd, NOOIT gegooid. */
+function safeRecord(recorder: MetricRecorder | undefined, fn: () => void): void {
+  if (!recorder) return;
+  try {
+    fn();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[observability] recorder failed (non-fatal): ${message.slice(0, 200)}`);
+  }
 }
 
 export interface StartSessionResult {
@@ -296,6 +310,7 @@ export async function startWorkSession(
         }
 
         decisions.push(record);
+        safeRecord(deps.recorder, () => deps.recorder!.recordAgentStep("autonomous-employee", sessionId));
         await appendWorkSessionStep(deps.sql, sessionId, "decision", "ok", record);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -385,6 +400,7 @@ export async function approveAction(
       riskLevel: "HIGH",
       now: deps.now?.(),
     });
+    safeRecord(deps.recorder, () => deps.recorder!.recordApprovalPending("autonomous-employee", "email_send"));
     await deps.approvals.approve(approvalId, input.approver);
     log(`approval ${approvalId} APPROVED by ${input.approver}`);
   }
@@ -463,7 +479,9 @@ export async function rejectAction(
       riskLevel: "HIGH",
       now: deps.now?.(),
     });
+    safeRecord(deps.recorder, () => deps.recorder!.recordApprovalPending("autonomous-employee", "email_send"));
     await deps.approvals.reject(approvalId, approver);
+    safeRecord(deps.recorder, () => deps.recorder!.recordApprovalRejected("autonomous-employee", "email_send"));
     log(`approval ${approvalId} REJECTED by ${approver}`);
   }
 

@@ -44,6 +44,26 @@ export interface MetricRecorder {
 
   /** TASK 7-koppeling: discovery-calls meten (niet in de pure functie). */
   recordDiscovery(intentHash: string, agentId: string, toolCount: number): void;
+
+  // FASE 12-counters (TASK 24 §4): integratiepunten vanuit approval/budget/
+  // orchestrator/netwerk-adapters. Allemaal observability-only.
+  /** Approval create → pending-teller. */
+  recordApprovalPending(agentId: string, toolId: string): void;
+
+  /** Approval reject → rejected-teller. */
+  recordApprovalRejected(agentId: string, toolId: string): void;
+
+  /** Budget-stop → exceeded-teller (field: steps/toolCalls/networkRequests/...). */
+  recordBudgetExceeded(agentId: string, field: string): void;
+
+  /** Employee-stap per company. */
+  recordAgentStep(agentId: string, sessionId: string | null): void;
+
+  /** Netwerk-call van een netwerk-adapter. */
+  recordExternalRequest(toolId: string): void;
+
+  /** Kosten/tokens (model-calls). */
+  recordAgentCost(agentId: string, tenantId: string, cost: number, tokens: number): void;
 }
 
 /** Default (tests/prod zonder injectie): observability-only no-op. */
@@ -52,6 +72,24 @@ export const NoopRecorder: MetricRecorder = {
     /* no-op — observability-only */
   },
   recordDiscovery() {
+    /* no-op */
+  },
+  recordApprovalPending() {
+    /* no-op */
+  },
+  recordApprovalRejected() {
+    /* no-op */
+  },
+  recordBudgetExceeded() {
+    /* no-op */
+  },
+  recordAgentStep() {
+    /* no-op */
+  },
+  recordExternalRequest() {
+    /* no-op */
+  },
+  recordAgentCost() {
     /* no-op */
   },
 };
