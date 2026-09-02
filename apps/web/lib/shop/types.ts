@@ -1,12 +1,15 @@
 /**
  * Webshop — gedeelde types (shop).
  *
- * Prijzen leven ALTIJD in de database (price_cents); de browser levert
- * nooit een prijs. Orderstatus komt ALLEEN uit de geverifieerde
- * Stripe-webhook (PENDING → PAID/CANCELLED/FAILED).
+ * Fase 1 = catalogus + productselectie: alleen producten. Betalingen zijn
+ * BEWUST buiten scope (payments: intentionally not implemented); zodra een
+ * payment provider wordt gekozen, komt er een aparte order-/payment-laag
+ * achter een abstracte PaymentProvider-interface bij.
+ *
+ * Prijzen leven ALTIJD in de database (price_cents); de UI toont alleen
+ * wat de database levert — er is geen pad waarlangs een client een prijs
+ * kan aanleveren.
  */
-
-export type ShopOrderStatus = "PENDING" | "PAID" | "CANCELLED" | "FAILED";
 
 export interface ShopProduct {
   productId: string;
@@ -17,17 +20,4 @@ export interface ShopProduct {
   currency: string;
   taxNote: string;
   active: boolean;
-}
-
-export interface ShopOrder {
-  orderId: string;
-  productId: string;
-  sessionId: string | null;
-  status: ShopOrderStatus;
-  customerEmail: string | null;
-  quantity: number;
-  unitPriceCents: number;
-  totalCents: number;
-  currency: string;
-  createdAt: string;
 }

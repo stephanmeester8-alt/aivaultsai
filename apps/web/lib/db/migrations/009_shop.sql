@@ -1,9 +1,13 @@
--- Agent Tool Platform — webshop (shop)
+-- Agent Tool Platform — webshop catalogus (shop)
 -- Apply after 008_tenant_tool_policies.sql (vereist pgcrypto uit 001).
--- Eén digitaal product vandaag (AI-assistent-pakket, €249 excl. btw);
--- de tabel is generiek voor toekomstige producten.
--- Orders: status komt ALLEEN uit de geverifieerde Stripe-webhook
--- (PENDING → PAID/CANCELLED); nooit vanuit een client-redirect.
+-- Fase 1: catalogus + productselectie (géén orders/betalingen).
+-- Payments zijn BEWUST buiten scope; een order-/payment-laag volgt later
+-- achter een abstracte PaymentProvider-interface.
+--
+-- Let op: in eerdere omgevingen is een shop_orders-tabel aangemaakt (fase
+-- Stripe). Die is hier verwijderd uit de migratie; bestaande databases
+-- bevatten de ongebruikte tabel nog tot een expliciete opschoon-migratie.
+--
 -- Idempotent en non-destructief: geen DROP, geen reset, geen deletes.
 
 CREATE TABLE IF NOT EXISTS shop_products (
@@ -22,32 +26,8 @@ CREATE TABLE IF NOT EXISTS shop_products (
 CREATE INDEX IF NOT EXISTS idx_shop_products_active
   ON shop_products(active);
 
-CREATE TABLE IF NOT EXISTS shop_orders (
-  order_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id        UUID NOT NULL REFERENCES shop_products(product_id),
-  session_id        TEXT UNIQUE,          -- Stripe Checkout Session id (na checkout-start)
-  status            TEXT NOT NULL DEFAULT 'PENDING'
-                    CHECK (status IN ('PENDING','PAID','CANCELLED','FAILED')),
-  customer_email    TEXT,
-  quantity          INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
-  unit_price_cents  INTEGER NOT NULL CHECK (unit_price_cents > 0),
-  total_cents       INTEGER NOT NULL CHECK (total_cents > 0),
-  currency          TEXT NOT NULL DEFAULT 'EUR',
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_shop_orders_status
-  ON shop_orders(status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_shop_orders_session
-  ON shop_orders(session_id);
-
 DROP TRIGGER IF EXISTS shop_products_set_updated_at ON shop_products;
 CREATE TRIGGER shop_products_set_updated_at BEFORE UPDATE ON shop_products
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS shop_orders_set_updated_at ON shop_orders;
-CREATE TRIGGER shop_orders_set_updated_at BEFORE UPDATE ON shop_orders
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- Seed: het enige product vandaag (idempotent).

@@ -158,7 +158,7 @@ async function main() {
       }
     }
 
-    const requiredTables = ["shop_products", "shop_orders"];
+    const requiredTables = ["shop_products"];
     const after = await sql`
       SELECT table_name
       FROM information_schema.tables
@@ -169,7 +169,7 @@ async function main() {
     const afterNames = after.map((r) => r.table_name);
     const missing = requiredTables.filter((t) => !afterNames.includes(t));
     console.log("");
-    console.log(`Shop tables present: ${afterNames.length}/${requiredTables.length}`);
+    console.log(`Shop table present: ${afterNames.length}/${requiredTables.length}`);
     if (missing.length > 0) {
       console.error("MISSING:", missing.join(", "));
       process.exitCode = 1;

@@ -17,7 +17,7 @@ export function ProductCard({ product }: { product: ShopProduct }) {
         href={`/shop/${product.slug}`}
         className="mt-5 inline-flex items-center justify-center rounded-sm bg-ink px-4 py-3 text-sm font-medium text-canvas no-underline hover:bg-gold"
       >
-        Bekijk en bestel →
+        Bekijk product →
       </Link>
     </article>
   );
