@@ -31,9 +31,23 @@ export const metadata: Metadata = {
 
 /**
  * Product-JSON-LD met één correcte Offer (vereist door Google Product
- * rich results): €249,00 eenmalig, EUR, InStock. Geen review of
- * aggregateRating (er bestaan geen beoordelingen — geen fakes). Geen
- * priceValidUntil (geen geldige einddatum: het aanbod is doorlopend).
+ * rich results): €249,00 eenmalig, EUR, InStock.
+ *
+ * - image: de bestaande, echte en publiek bereikbare OG-afbeelding van de
+ *   site (dynamische route, 1200×630 PNG). Geen verzonnen URL. Zodra er een
+ *   echte product-specifieke afbeelding bestaat, wordt alleen deze URL
+ *   vervangen.
+ * - brand: Google's Product-markup verwacht het type Brand (met name),
+ *   niet een Organization-object — vandaar {"@type":"Brand"}.
+ * - seller binnen offers blijft een Organization-object (schema.org-correct).
+ * - shippingDetails: BEWUST weggelaten — volledig digitaal product
+ *   (assistent + cursus + online onboarding); fysieke verzending bestaat
+ *   niet en wordt niet verzonnen.
+ * - hasMerchantReturnPolicy: BEWUST weggelaten — er bestaat nog geen
+ *   retour-/refundbeleid; toevoegen zodra de eigenaar een echt beleid
+ *   formuleert. Geen verzonnen retourtermijn.
+ * - Geen review of aggregateRating (er bestaan geen beoordelingen).
+ * - Geen priceValidUntil (doorlopend aanbod).
  * De prijs op de pagina is exclusief btw; schema.org Offer heeft geen
  * eenduidig excl-btw-veld, dus price = 249.00 zoals het aanbod luidt.
  */
@@ -42,7 +56,8 @@ const PRODUCT_SCHEMA = {
   "@type": "Product",
   name: "AI-assistent + cursus + persoonlijke onboarding",
   description: HERO.lead,
-  brand: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+  image: `${SITE_URL}/opengraph-image`,
+  brand: { "@type": "Brand", name: SITE_NAME },
   offers: {
     "@type": "Offer",
     url: `${SITE_URL}/ai-assistent`,
