@@ -8,7 +8,7 @@
  * prices only.
  */
 
-import { SITE_NAME, SITE_URL } from "./site.ts";
+import { CONTACT_EMAIL, SITE_NAME, SITE_URL } from "./site.ts";
 
 export interface ServicePageFaq {
   question: string;
@@ -43,8 +43,7 @@ export interface ServicePageConfig {
   related: { href: string; label: string }[];
 }
 
-const CONTACT_MAILTO =
-  "https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Kennismaking%20AIVaultsAI";
+const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Kennismaking AIVaultsAI")}`;
 
 /** Shared AIVaultsAI OG image (app/opengraph-image.tsx route, reachable live). */
 const OG_IMAGE = `${SITE_URL}/opengraph-image`;

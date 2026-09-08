@@ -2,7 +2,12 @@ export const SITE_NAME = "AIVaultsAI";
 export const SITE_URL = "https://www.aivaultsai.one";
 export const SITE_DOMAIN = "aivaultsai.one";
 
-export const CONTACT_EMAIL = "aivaultsai@gmail.com";
+/**
+ * Officieel klantcontactadres. Geen privé-/persoonlijke adressen publiek
+ * tonen. Notificatie-ontvanger (leads) loopt via LEAD_NOTIFICATION_EMAIL
+ * (server-env) — dit adres is de publieke contactweergave.
+ */
+export const CONTACT_EMAIL = "info@aivaultsai.nl";
 export const LINKEDIN_URL =
   "https://www.linkedin.com/in/stephan-meester-758566374/";
 

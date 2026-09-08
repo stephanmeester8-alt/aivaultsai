@@ -82,7 +82,7 @@ export function LeadForm() {
           message:
             response.status === 429
               ? "Je hebt te veel aanvragen verstuurd. Probeer het over een paar minuten opnieuw."
-              : "Er ging iets mis. Probeer het opnieuw, of mail ons direct via aivaultsai@gmail.com.",
+              : "Er ging iets mis. Probeer het opnieuw, of mail ons direct via info@aivaultsai.nl.",
         });
       }
     } catch {

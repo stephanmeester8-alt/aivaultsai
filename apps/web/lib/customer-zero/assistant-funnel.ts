@@ -25,6 +25,25 @@ export interface FunnelDeps {
    * conversation; non-fatal.
    */
   runRuntimeTask?: (conversationId: string) => Promise<unknown>;
+  /**
+   * Optional internal notification when a conversation becomes a lead.
+   * Runs only on lead creation (max once per conversation), never on
+   * informational chats; non-fatal. Receives a concise server-generated
+   * summary — never the raw conversation.
+   */
+  notifyLead?: (summary: LeadCreatedSummary) => Promise<void>;
+}
+
+/** Korte, server-gegenereerde samenvatting van een nieuwe assistant-lead. */
+export interface LeadCreatedSummary {
+  conversationId: string;
+  leadId?: string;
+  intentLevel: string;
+  intentScore: number;
+  /** Naam/e-mail worden alleen meegestuurd als de lead die werkelijk heeft. */
+  name?: string | null;
+  email?: string | null;
+  createdAt?: string;
 }
 
 export interface FunnelOutcome {
@@ -53,6 +72,23 @@ export async function maybeRunCustomerZeroOrchestration(
           "[assistant-funnel] agent runtime task failed",
           error instanceof Error ? error.name : "unknown",
         );
+      }
+      // Interne notificatie (Resend) bij lead-creatie — non-fatal; de lead
+      // staat al in de database en blijft daar bij een notificatiefout.
+      if (deps.notifyLead) {
+        try {
+          await deps.notifyLead({
+            conversationId: input.conversationId,
+            leadId: result.leadId,
+            intentLevel: result.intent.level,
+            intentScore: result.intent.score,
+          });
+        } catch (error) {
+          console.error(
+            "[assistant-funnel] lead notification failed",
+            error instanceof Error ? error.name : "unknown",
+          );
+        }
       }
     }
     // GA4 observability only — never decides anything; non-fatal.
@@ -90,6 +126,57 @@ export function createDefaultFunnelDeps(): FunnelDeps {
         "../agent-runtime/runtime-adapter"
       );
       return runConversationRuntimeTask(conversationId);
+    },
+    notifyLead: async (summary) => {
+      // Lead-data server-side ophalen (nooit LLM-output vertrouwen) en de
+      // interne notificatie via de bestaande Resend-kernel versturen naar
+      // LEAD_NOTIFICATION_EMAIL (server-env; geen hardcoded adres).
+      const { sql } = await import("../db/client");
+      const rows = await sql`
+        SELECT name, email, phone, company, intent, status, created_at
+        FROM leads
+        WHERE lead_id = ${summary.leadId ?? null}::uuid
+        LIMIT 1
+      ` as unknown as Array<{
+        name?: unknown; email?: unknown; phone?: unknown; company?: unknown;
+        intent?: unknown; status?: unknown; created_at?: unknown;
+      }>;
+      const lead = rows[0];
+
+      const apiKey = process.env.RESEND_API_KEY;
+      const from = process.env.LEAD_FROM_EMAIL;
+      const to = process.env.LEAD_NOTIFICATION_EMAIL;
+      if (!apiKey || !from || !to) {
+        console.warn("[assistant-funnel] Resend niet geconfigureerd — lead-notificatie overgeslagen");
+        return;
+      }
+
+      const { createResendSender } = await import("../leads/notify");
+      const send = createResendSender({ apiKey, from, to });
+      const name = typeof lead?.name === "string" && lead.name.length > 0 ? lead.name : null;
+      const email = typeof lead?.email === "string" && lead.email.length > 0 ? lead.email : null;
+      const phone = typeof lead?.phone === "string" && lead.phone.length > 0 ? lead.phone : null;
+      const company = typeof lead?.company === "string" && lead.company.length > 0 ? lead.company : null;
+      const status = typeof lead?.status === "string" ? lead.status : "NEW";
+      const createdAt = typeof lead?.created_at === "string" ? lead.created_at : "";
+
+      const lines = [
+        "Nieuwe lead via de AI-assistent op de website.",
+        "",
+        `Conversatie: ${summary.conversationId}`,
+        `Lead ID: ${summary.leadId ?? "-"}`,
+        `Intent: ${summary.intentLevel} (score ${summary.intentScore}/10)`,
+        `Status: ${status}`,
+        `Naam: ${name ?? "-"}`,
+        `E-mail: ${email ?? "-"}`,
+        `Telefoon: ${phone ?? "-"}`,
+        `Bedrijf: ${company ?? "-"}`,
+        `Aangemaakt: ${createdAt}`,
+      ];
+      await send({
+        subject: "Nieuwe lead via AIVaultsAI — AI-assistent",
+        text: lines.join("\n"),
+      });
     },
   };
 }

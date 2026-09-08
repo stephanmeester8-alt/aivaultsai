@@ -38,10 +38,44 @@ export type ResendFetch = (
   },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
+export interface ResendEmailInput {
+  subject: string;
+  text: string;
+}
+
+/** Lage Resend-kernel: verstuurt één e-mail (from/to uit config). */
+export function createResendSender(
+  config: ResendConfig,
+  fetchImpl: ResendFetch = fetch as unknown as ResendFetch,
+) {
+  return async function sendEmail(input: ResendEmailInput): Promise<void> {
+    const response = await fetchImpl(RESEND_API_BASE, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: config.from,
+        to: [config.to],
+        subject: input.subject,
+        text: input.text,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`RESEND_API_ERROR:${response.status}`);
+    }
+  };
+}
+
+export type ResendSender = ReturnType<typeof createResendSender>;
+
 export function createLeadNotifier(
   config: ResendConfig,
   fetchImpl: ResendFetch = fetch as unknown as ResendFetch,
 ) {
+  const send = createResendSender(config, fetchImpl);
   return async function sendLeadNotification(lead: LeadNotification): Promise<void> {
     const subject = `Nieuwe lead via AIVaultsAI — ${lead.name}`;
     const lines = [
@@ -59,23 +93,7 @@ export function createLeadNotifier(
       `Lead ID: ${lead.leadId}`,
     ];
 
-    const response = await fetchImpl(RESEND_API_BASE, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: config.from,
-        to: [config.to],
-        subject,
-        text: lines.join("\n"),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`RESEND_API_ERROR:${response.status}`);
-    }
+    await send({ subject, text: lines.join("\n") });
   };
 }
 

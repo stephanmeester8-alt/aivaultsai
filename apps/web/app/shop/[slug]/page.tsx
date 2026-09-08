@@ -6,7 +6,7 @@ import { Container } from "@/components/container";
 import { sql } from "@/lib/db/client";
 import { getActiveProductBySlug } from "@/lib/shop/products";
 import { formatPriceCents } from "@/lib/shop/format";
-import { SITE_URL } from "@/lib/site";
+import { CONTACT_EMAIL, SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +14,7 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
-const CONTACT_MAILTO =
-  "https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Vraag%20over%20het%20AI-assistent-pakket";
+const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Vraag over het AI-assistent-pakket")}`;
 
 async function loadProduct(slug: string) {
   try {

@@ -1,6 +1,7 @@
 import { Container } from "./container";
 import { LeadForm } from "./leads/lead-form";
 import { LiveAssistant } from "./live-assistant";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 const solutions = [
   {
@@ -736,25 +737,11 @@ export function CommercialHome() {
             </div>
 
             <p className="mt-4 text-xs leading-relaxed text-faint">
-              Liever direct mailen?{" "}
-              <a
-                href="https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Kennismaking%20AIVaultsAI"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-mute underline decoration-line underline-offset-2 hover:text-ink"
-              >
-                Plan een kennismaking
-              </a>{" "}
-              of{" "}
-              <a
-                href="https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Vraag%20over%20AIVaultsAI"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-mute underline decoration-line underline-offset-2 hover:text-ink"
-              >
-                stel een vraag
+              Liever direct mailen naar{" "}
+              <a href={`mailto:${CONTACT_EMAIL}`} className="text-mute underline decoration-line underline-offset-2 hover:text-ink">
+                {CONTACT_EMAIL}
               </a>
-              .
+              ? We reageren zo snel mogelijk.
             </p>
           </div>
         </Container>
