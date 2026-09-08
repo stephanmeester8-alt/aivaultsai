@@ -2,7 +2,9 @@ import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date("2026-08-20");
+  // Werkelijke laatste wijzigingsdatum van de commerciële pagina's
+  // (release-reeks september 2026; geen gefabriceerde datums).
+  const lastModified = new Date("2026-09-02");
   return [
     {
       url: SITE_URL,
