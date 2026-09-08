@@ -1,4 +1,5 @@
 import { Container } from "./container";
+import { LeadForm } from "./leads/lead-form";
 import { LiveAssistant } from "./live-assistant";
 
 const solutions = [
@@ -730,25 +731,31 @@ export function CommercialHome() {
               website, een AI-assistent of één concreet proces.
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8">
+              <LeadForm />
+            </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-faint">
+              Liever direct mailen?{" "}
               <a
                 href="https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Kennismaking%20AIVaultsAI"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-sm bg-ink px-6 py-3.5 text-sm font-medium text-canvas no-underline hover:bg-gold"
+                className="text-mute underline decoration-line underline-offset-2 hover:text-ink"
               >
-                Plan een kennismaking →
-              </a>
-
+                Plan een kennismaking
+              </a>{" "}
+              of{" "}
               <a
                 href="https://mail.google.com/mail/?view=cm&fs=1&to=aivaultsai@gmail.com&su=Vraag%20over%20AIVaultsAI"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-sm border border-line px-6 py-3.5 text-sm font-medium text-ink no-underline hover:border-gold/50"
+                className="text-mute underline decoration-line underline-offset-2 hover:text-ink"
               >
-                Stel een vraag
+                stel een vraag
               </a>
-            </div>
+              .
+            </p>
           </div>
         </Container>
       </section>
