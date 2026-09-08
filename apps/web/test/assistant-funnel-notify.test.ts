@@ -9,6 +9,7 @@ import {
 import type { CustomerZeroResult } from "../lib/customer-zero/orchestrator.ts";
 
 const CONVERSATION_ID = "11111111-1111-4111-8111-111111111111";
+const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
 function leadResult(overrides: Partial<CustomerZeroResult> = {}): CustomerZeroResult {
   return {
@@ -36,6 +37,7 @@ function makeFunnelDeps(overrides: Partial<FunnelDeps> = {}) {
 }
 
 const INPUT = {
+  tenantId: TENANT_ID,
   conversationId: CONVERSATION_ID,
   messages: [{ role: "user" as const, content: "Ik wil een AI-assistent voor mijn bedrijf." }],
 };

@@ -6,6 +6,8 @@ import {
   type FunnelDeps,
 } from "../lib/customer-zero/assistant-funnel.ts";
 
+const TENANT_ID = "11111111-1111-4111-8111-111111111111";
+
 interface FakeFunnel extends FunnelDeps {
   calls: { conversationId: string; messages: unknown[] }[];
 }
@@ -30,7 +32,7 @@ function deps(overrides: Partial<FunnelDeps> = {}): FakeFunnel {
 test("runs the orchestrator when no lead exists yet", async () => {
   const d = deps();
   const outcome = await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [{ role: "user", content: "meer klanten" }] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [{ role: "user", content: "meer klanten" }] },
     d,
   );
   assert.equal(outcome.ran, true);
@@ -42,7 +44,7 @@ test("runs the orchestrator when no lead exists yet", async () => {
 test("skips orchestration when a lead already exists (no duplicate leads)", async () => {
   const d = deps({ hasExistingLead: async () => true });
   const outcome = await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [] },
     d,
   );
   assert.equal(outcome.ran, false);
@@ -57,7 +59,7 @@ test("a failed orchestrator does not throw (non-fatal wiring)", async () => {
     },
   });
   const outcome = await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [] },
     d,
   );
   assert.equal(outcome.ran, false);
@@ -71,7 +73,7 @@ test("a failed lead-exists check does not throw", async () => {
     },
   });
   const outcome = await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [] },
     d,
   );
   assert.equal(outcome.ran, false);
@@ -80,7 +82,7 @@ test("a failed lead-exists check does not throw", async () => {
 test("messages are passed through to the orchestrator unchanged", async () => {
   const d = deps();
   const messages = [{ role: "user" as const, content: "ik wil een kennismaking plannen" }];
-  await maybeRunCustomerZeroOrchestration({ conversationId: "c", messages }, d);
+  await maybeRunCustomerZeroOrchestration({ tenantId: TENANT_ID, conversationId: "c", messages }, d);
   assert.deepEqual(d.calls[0]!.messages, messages);
 });
 
@@ -91,7 +93,7 @@ test("non-commercial intent leaves the flow untouched (orchestrator decides)", a
     },
   });
   const outcome = await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [{ role: "user", content: "wat kunnen jullie met ai" }] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [{ role: "user", content: "wat kunnen jullie met ai" }] },
     d,
   );
   // The funnel runs the orchestrator; the orchestrator itself decides
@@ -107,7 +109,7 @@ test("runs the agent runtime task exactly once when a lead was created", async (
     },
   });
   await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [{ role: "user", content: "afspraak plannen" }] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [{ role: "user", content: "afspraak plannen" }] },
     d,
   );
   assert.deepEqual(runtimeCalls, ["conv-1"]);
@@ -124,7 +126,7 @@ test("does not run the runtime task when no lead was created", async () => {
     },
   });
   await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [] },
     d,
   );
   assert.deepEqual(runtimeCalls, []);
@@ -137,7 +139,7 @@ test("a failing runtime task does not break the funnel (non-fatal)", async () =>
     },
   });
   const outcome = await maybeRunCustomerZeroOrchestration(
-    { conversationId: "conv-1", messages: [{ role: "user", content: "afspraak plannen" }] },
+    { tenantId: TENANT_ID, conversationId: "conv-1", messages: [{ role: "user", content: "afspraak plannen" }] },
     d,
   );
   assert.equal(outcome.ran, true);

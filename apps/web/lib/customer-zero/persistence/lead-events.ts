@@ -14,6 +14,8 @@ export type LeadEventSql = (
 ) => Promise<unknown[]>;
 
 export interface LeadEventInput {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   leadId?: string;
   conversationId?: string;
   /** Optional correlation to the message that produced the event. */
@@ -35,6 +37,7 @@ export async function recordLeadEvent(
   try {
     const rows = await eventSql`
       INSERT INTO lead_events (
+        tenant_id,
         lead_id,
         conversation_id,
         message_id,
@@ -44,6 +47,7 @@ export async function recordLeadEvent(
         metadata
       )
       VALUES (
+        ${input.tenantId}::uuid,
         ${input.leadId ?? null},
         ${input.conversationId ?? null},
         ${input.messageId ?? null},

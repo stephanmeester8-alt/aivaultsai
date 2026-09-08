@@ -188,9 +188,9 @@ export async function startWorkSession(
       try {
         let research: Awaited<ReturnType<typeof researchCompanyWebsite>>["value"] | null = null;
 
-        if (domain && (await hasFreshResearch(deps.sql, domain, freshnessMs))) {
+        if (domain && (await hasFreshResearch(deps.sql, config.tenantId, domain, freshnessMs))) {
           // Cache-first: reuse stored research/detection (cost control).
-          const stored = await getCompanyByDomain(deps.sql, domain);
+          const stored = await getCompanyByDomain(deps.sql, config.tenantId, domain);
           if (stored?.websiteResearch && stored.aiDetection) {
             research = {
               research: stored.websiteResearch,
@@ -209,6 +209,7 @@ export async function startWorkSession(
           if (toolResult.ok && toolResult.value) {
             research = toolResult.value;
             const { companyId } = await upsertCompany(deps.sql, {
+              tenantId: config.tenantId,
               name: company.name,
               domain: domain || company.name.toLowerCase().replace(/[^a-z0-9]+/g, ""),
               industry: company.industry,

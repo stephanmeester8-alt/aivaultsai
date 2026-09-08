@@ -39,11 +39,11 @@ function makeLeadsSql() {
     const text = strings.join("?");
     if (text.includes("INSERT INTO contact_leads")) {
       inserts.push({
-        name: values[0],
-        email: values[1],
-        service: values[4],
-        status: values[6],
-        source: values[7],
+        tenantId: values[0],
+        name: values[1],
+        email: values[2],
+        service: values[5],
+        status: values[7],
       });
       return [{ lead_id: "lead-1", created_at: "2026-09-02T08:00:00.000Z" }];
     }

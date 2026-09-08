@@ -14,6 +14,8 @@ export interface OrchestratorMessage {
 }
 
 export interface CustomerZeroInput {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   conversationId: string;
   messages: OrchestratorMessage[];
   /** Optional correlation to the user message that triggered this flow. */
@@ -93,6 +95,7 @@ export async function runCustomerZeroOrchestrator(
   // createLead records lead_created exactly once and returns its event_id
   // for traceability. No second lead_created event is produced here.
   const lead = await deps.createLead({
+    tenantId: input.tenantId,
     conversationId: input.conversationId,
     messageId: input.messageId,
     status:
@@ -110,6 +113,7 @@ export async function runCustomerZeroOrchestrator(
 
   // Append-only event (non-fatal): records that intent was detected.
   await deps.recordLeadEvent({
+    tenantId: input.tenantId,
     conversationId: input.conversationId,
     messageId: input.messageId,
     eventType: "assistant_commercial_intent_detected",
@@ -148,6 +152,7 @@ export async function runCustomerZeroOrchestrator(
   if (leadCreatedEventId) {
     try {
       const persisted = await deps.createQualification({
+        tenantId: input.tenantId,
         leadId: lead.leadId,
         score: qualificationScore(intent),
         confidence: qualificationConfidence(intent),
@@ -165,6 +170,7 @@ export async function runCustomerZeroOrchestrator(
       qualificationPersisted = true;
       qualificationId = persisted.qualificationId;
       await deps.recordLeadEvent({
+        tenantId: input.tenantId,
         leadId: lead.leadId,
         conversationId: input.conversationId,
         messageId: input.messageId,

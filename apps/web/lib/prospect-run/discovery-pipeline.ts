@@ -153,7 +153,7 @@ export async function runDiscoveryPipeline(
     }
 
     try {
-      if (await hasFreshResearch(deps.sql, domain, freshnessMs)) {
+      if (await hasFreshResearch(deps.sql, options.tenantId, domain, freshnessMs)) {
         log(`company cached, skipped research: ${domain}`);
         outcomes.push({
           domain,
@@ -189,6 +189,7 @@ export async function runDiscoveryPipeline(
       }
 
       const { companyId } = await upsertCompany(deps.sql, {
+        tenantId: options.tenantId,
         name: company.name,
         domain,
         industry: company.industry,

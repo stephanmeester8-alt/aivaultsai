@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { BookingService } from "@/lib/booking/service";
 import { createProductionCalendarProvider } from "@/lib/booking/provider-factory";
 import { CalendarUnavailableError } from "@/lib/booking/providers/unavailable-calendar-provider";
+import { getSiteTenantId } from "@/lib/tenancy";
 
 export const runtime = "nodejs";
 
@@ -110,9 +111,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Tenant wordt server-side geresolveerd (architectuurregel:
+    // Authentication → Tenant Resolution → Tenant Context → Data); de client
+    // stuurt nooit een tenant mee.
+    const tenantId = getSiteTenantId();
+
     const appointment =
       await bookingService.createAppointment(
         parsed.data,
+        tenantId,
       );
 
     return NextResponse.json({

@@ -6,6 +6,8 @@ import {
   type OrchestratorDeps,
 } from "../lib/customer-zero/orchestrator.ts";
 
+const TENANT = "11111111-1111-4111-8111-111111111111";
+
 interface EventCall {
   eventType: string;
   leadId?: string;
@@ -52,7 +54,7 @@ const INFORMATIONAL_MESSAGES = [
 test("HIGH intent: qualification persisted -> lead_qualified event recorded", async () => {
   const { deps, eventCalls } = makeDeps();
   const result = await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES, messageId: "msg-1" },
+    { tenantId: TENANT, conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES, messageId: "msg-1" },
     deps,
   );
   assert.equal(result.leadCreated, true);
@@ -66,7 +68,7 @@ test("HIGH intent: qualification persisted -> lead_qualified event recorded", as
 test("lead_created is recorded exactly once by createLead (no duplicate event)", async () => {
   const { deps, eventCalls } = makeDeps();
   await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES },
+    { tenantId: TENANT, conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES },
     deps,
   );
   const created = eventCalls.filter((e) => e.eventType === "lead_created");
@@ -80,7 +82,7 @@ test("qualification persistence failure -> qualificationPersisted:false and NO l
     },
   });
   const result = await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES },
+    { tenantId: TENANT, conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES },
     deps,
   );
   assert.equal(result.qualificationPersisted, false);
@@ -103,7 +105,7 @@ test("missing lead_created event id -> qualification skipped, NO lead_qualified"
     }),
   });
   const result = await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES },
+    { tenantId: TENANT, conversationId: "conv-1", messages: HIGH_INTENT_MESSAGES },
     deps,
   );
   assert.equal(result.qualificationPersisted, false);
@@ -113,7 +115,7 @@ test("missing lead_created event id -> qualification skipped, NO lead_qualified"
 test("COMMERCIAL_INTENT -> lead NEW, no qualification, no lead_qualified", async () => {
   const { deps, eventCalls } = makeDeps();
   const result = await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: COMMERCIAL_INTENT_MESSAGES },
+    { tenantId: TENANT, conversationId: "conv-1", messages: COMMERCIAL_INTENT_MESSAGES },
     deps,
   );
   assert.equal(result.leadCreated, true);
@@ -128,7 +130,7 @@ test("COMMERCIAL_INTENT -> lead NEW, no qualification, no lead_qualified", async
 test("INFORMATIONAL intent -> no lead, no events", async () => {
   const { deps, eventCalls } = makeDeps();
   const result = await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: INFORMATIONAL_MESSAGES },
+    { tenantId: TENANT, conversationId: "conv-1", messages: INFORMATIONAL_MESSAGES },
     deps,
   );
   assert.equal(result.leadCreated, false);
@@ -138,7 +140,7 @@ test("INFORMATIONAL intent -> no lead, no events", async () => {
 test("message_id is correlated on the intent event", async () => {
   const { deps, eventCalls } = makeDeps();
   await runCustomerZeroOrchestrator(
-    { conversationId: "conv-1", messages: COMMERCIAL_INTENT_MESSAGES, messageId: "msg-42" },
+    { tenantId: TENANT, conversationId: "conv-1", messages: COMMERCIAL_INTENT_MESSAGES, messageId: "msg-42" },
     deps,
   );
   const intentEvent = eventCalls.find((e) => e.eventType === "assistant_commercial_intent_detected");

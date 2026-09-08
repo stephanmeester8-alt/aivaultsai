@@ -14,6 +14,8 @@ export type LeadsSql = (
 ) => Promise<unknown[]>;
 
 export interface InsertContactLeadInput {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   name: string;
   email: string;
   phone: string | null;
@@ -34,8 +36,9 @@ export async function insertContactLead(
   input: InsertContactLeadInput,
 ): Promise<InsertedContactLead> {
   const rows = (await sql`
-    INSERT INTO contact_leads (name, email, phone, company, service, message, status, source)
+    INSERT INTO contact_leads (tenant_id, name, email, phone, company, service, message, status, source)
     VALUES (
+      ${input.tenantId}::uuid,
       ${input.name},
       ${input.email},
       ${input.phone ?? null},
