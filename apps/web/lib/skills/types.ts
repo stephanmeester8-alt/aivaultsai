@@ -49,8 +49,31 @@ export interface AgentContext {
   conversationId?: string | null;
   sessionId?: string | null;
   agentId?: string;
+  /** Permissions van de aanroepende agent (policy-check van de router). */
+  agentPermissions?: readonly string[];
+  /** ApprovalId wanneer de router approval vereist (R4/REQUIRED). */
+  approvalId?: string;
+  /** Door de router toegekend executionId (audit-correlatie). */
+  executionId?: string;
+  /** Tool-toegangspoort (ToolRegistryV2-gateway) — alleen door de router. */
+  tools?: SkillToolGateway;
   now?: () => string;
   log?: (message: string) => void;
+}
+
+/**
+ * De enige tool-toegangspoort binnen een skill-execution: elke tool-call
+ * gaat door de router (allowedTools → registry → policy → approval →
+ * executor → recorder). Skills roepen NOOIT adapters direct aan.
+ */
+export interface SkillToolGateway {
+  execute(toolId: string, input: unknown): Promise<SkillToolOutcome>;
+}
+
+export interface SkillToolOutcome {
+  ok: boolean;
+  value?: unknown;
+  error?: string;
 }
 
 export type SkillResult =
