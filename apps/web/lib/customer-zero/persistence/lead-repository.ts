@@ -2,6 +2,8 @@ import type { LeadIntent, LeadSource, LeadStatus } from "../lead-types";
 import { recordLeadEventWithClient } from "./lead-events.ts";
 
 export interface CreateLeadInput {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   conversationId?: string;
   /** Optional correlation to the message that produced the lead. */
   messageId?: string;
@@ -38,6 +40,7 @@ export async function createLead(
   const { sql } = await import("../../db/client.ts");
   const rows = await sql`
     INSERT INTO leads (
+      tenant_id,
       conversation_id,
       status,
       source,
@@ -55,6 +58,7 @@ export async function createLead(
       metadata
     )
     VALUES (
+      ${input.tenantId}::uuid,
       ${input.conversationId ?? null}::uuid,
       ${input.status},
       ${input.source},
@@ -89,6 +93,7 @@ export async function createLead(
   // Non-fatal: a failed event write must not break lead creation. The
   // event_id is returned for traceability (e.g. qualification support).
   const leadCreatedEventId = await recordLeadEventWithClient({
+    tenantId: input.tenantId,
     leadId: lead.lead_id,
     conversationId: lead.conversation_id ?? undefined,
     messageId: input.messageId,

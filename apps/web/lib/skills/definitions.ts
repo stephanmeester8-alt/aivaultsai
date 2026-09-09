@@ -141,6 +141,7 @@ export function createLeadCaptureSkill(deps: LeadCaptureSkillDeps): AgentSkill {
 
       const result = await submitLead(
         {
+          tenantId: context.tenantId, // router-invariant: NO TENANT = NO EXECUTION
           sql: deps.sql,
           notifier: deps.notifier ?? null,
           now: context.now,

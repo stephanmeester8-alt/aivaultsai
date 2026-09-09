@@ -1,6 +1,8 @@
 import { sql } from "@/lib/db/client";
 
 export type PersistAppointmentInput = {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   leadId: string;
   conversationId: string;
   scheduledStart: string;
@@ -27,6 +29,7 @@ export async function persistAppointment(
 ): Promise<PersistedAppointment> {
   const rows = await sql`
     INSERT INTO appointments (
+      tenant_id,
       lead_id,
       conversation_id,
       requested_at,
@@ -40,6 +43,7 @@ export async function persistAppointment(
       status
     )
     VALUES (
+      ${input.tenantId}::uuid,
       ${input.leadId},
       ${input.conversationId},
       NOW(),

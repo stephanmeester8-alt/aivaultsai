@@ -25,14 +25,16 @@ export class BookingService {
 
   async createAppointment(
     request: CreateAppointmentRequest,
+    tenantId: string,
   ): Promise<CreatedAppointment> {
     // Eerst de echte calendar provider laten bevestigen.
     const appointment =
       await this.calendarProvider.createAppointment(request);
 
-    // Daarna Customer Zero persistence.
+    // Daarna Customer Zero persistence (NO TENANT = NO EXECUTION).
     const persistedAppointment =
       await persistAppointment({
+        tenantId,
         leadId: request.leadId,
         conversationId: request.conversationId,
         scheduledStart: appointment.start,
@@ -51,6 +53,7 @@ export class BookingService {
       });
 
     await persistAppointmentCreatedEvent({
+      tenantId,
       leadId: request.leadId,
       conversationId: request.conversationId,
       appointmentId: persistedAppointment.appointmentId,

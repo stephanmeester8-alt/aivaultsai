@@ -15,8 +15,8 @@ import type { CustomerZeroInput, CustomerZeroResult } from "./orchestrator";
 import { fireFunnelAnalytics } from "../analytics/gtag.ts";
 
 export interface FunnelDeps {
-  /** Whether a lead already exists for this conversation. */
-  hasExistingLead: (conversationId: string) => Promise<boolean>;
+  /** Whether a lead already exists for this conversation (tenant-aware). */
+  hasExistingLead: (conversationId: string, tenantId: string) => Promise<boolean>;
   /** Runs the existing orchestrator (intent -> createLead -> events). */
   runOrchestrator: (input: CustomerZeroInput) => Promise<CustomerZeroResult>;
   /**
@@ -36,6 +36,8 @@ export interface FunnelDeps {
 
 /** Korte, server-gegenereerde samenvatting van een nieuwe assistant-lead. */
 export interface LeadCreatedSummary {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   conversationId: string;
   leadId?: string;
   intentLevel: string;
@@ -57,7 +59,7 @@ export async function maybeRunCustomerZeroOrchestration(
   deps: FunnelDeps,
 ): Promise<FunnelOutcome> {
   try {
-    const hasLead = await deps.hasExistingLead(input.conversationId);
+    const hasLead = await deps.hasExistingLead(input.conversationId, input.tenantId);
     if (hasLead) {
       return { ran: false, reason: "lead_exists" };
     }
@@ -78,6 +80,7 @@ export async function maybeRunCustomerZeroOrchestration(
       if (deps.notifyLead) {
         try {
           await deps.notifyLead({
+            tenantId: input.tenantId,
             conversationId: input.conversationId,
             leadId: result.leadId,
             intentLevel: result.intent.level,
@@ -107,12 +110,13 @@ export async function maybeRunCustomerZeroOrchestration(
 /** Production deps using the real DB client and orchestrator (lazy imports). */
 export function createDefaultFunnelDeps(): FunnelDeps {
   return {
-    hasExistingLead: async (conversationId) => {
+    hasExistingLead: async (conversationId, tenantId) => {
       const { sql } = await import("../db/client");
       const rows = await sql`
         SELECT 1
         FROM leads
         WHERE conversation_id = ${conversationId}::uuid
+          AND tenant_id = ${tenantId}::uuid
         LIMIT 1
       `;
       return rows.length > 0;
@@ -131,11 +135,14 @@ export function createDefaultFunnelDeps(): FunnelDeps {
       // Lead-data server-side ophalen (nooit LLM-output vertrouwen) en de
       // interne notificatie via de bestaande Resend-kernel versturen naar
       // LEAD_NOTIFICATION_EMAIL (server-env; geen hardcoded adres).
+      // Tenant-filter: een lead uit een andere tenant is voor deze tenant
+      // niet zichtbaar (Sprint 3).
       const { sql } = await import("../db/client");
       const rows = await sql`
         SELECT name, email, phone, company, intent, status, created_at
         FROM leads
         WHERE lead_id = ${summary.leadId ?? null}::uuid
+          AND tenant_id = ${summary.tenantId}::uuid
         LIMIT 1
       ` as unknown as Array<{
         name?: unknown; email?: unknown; phone?: unknown; company?: unknown;

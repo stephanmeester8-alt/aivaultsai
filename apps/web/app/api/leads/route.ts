@@ -5,6 +5,7 @@ import { createLeadNotifier } from "@/lib/leads/notify";
 import { submitLead } from "@/lib/leads/submit";
 import { validateLeadInput } from "@/lib/leads/validation";
 import { RateLimiter } from "@/lib/security/rate-limit";
+import { getSiteTenantId } from "@/lib/tenancy";
 
 export const runtime = "nodejs";
 
@@ -84,7 +85,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // 4. Insert (primair) + notificatie (secundair).
   const result = await submitLead(
-    { sql, notifier, log: (message) => console.info(`[leads] ${message}`) },
+    {
+      tenantId: getSiteTenantId(), // centrale site-tenant-resolutie (Sprint 3)
+      sql,
+      notifier,
+      log: (message) => console.info(`[leads] ${message}`),
+    },
     validated.data,
   );
 

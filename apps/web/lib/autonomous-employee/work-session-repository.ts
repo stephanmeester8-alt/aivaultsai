@@ -119,8 +119,12 @@ export async function appendWorkSessionStep(
   status: string,
   detail: unknown,
 ): Promise<void> {
+  // Child-integriteit (Sprint 3): de step erft tenant_id van zijn parent-
+  // sessie via subselect — een step kan nooit een andere tenant krijgen.
   await sql`
-    INSERT INTO employee_work_session_steps (session_id, step, status, detail)
-    VALUES (${sessionId}::uuid, ${step}, ${status}, ${JSON.stringify(detail ?? {})}::jsonb)
+    INSERT INTO employee_work_session_steps (tenant_id, session_id, step, status, detail)
+    SELECT tenant_id, ${sessionId}::uuid, ${step}, ${status}, ${JSON.stringify(detail ?? {})}::jsonb
+    FROM employee_work_sessions
+    WHERE session_id = ${sessionId}::uuid
   `;
 }

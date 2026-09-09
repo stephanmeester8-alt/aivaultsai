@@ -21,6 +21,8 @@ export type SubmitLeadResult =
   | { ok: false; error: "INVALID_INPUT" | "STORAGE_FAILED" };
 
 export interface SubmitLeadDeps {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   sql: LeadsSql;
   notifier: LeadNotifier | null;
   now?: () => string;
@@ -43,6 +45,7 @@ export async function submitLead(
   let inserted;
   try {
     inserted = await insertContactLead(deps.sql, {
+      tenantId: deps.tenantId,
       name: submission.name,
       email: submission.email,
       phone: submission.phone,

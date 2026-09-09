@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createLead } from "../../../../lib/customer-zero/persistence/lead-repository.ts";
 import { isTestEndpointEnabled } from "../../../../lib/customer-zero/test-endpoint-guard.ts";
+import { getSiteTenantId } from "../../../../lib/tenancy.ts";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,7 @@ export async function POST() {
 
   try {
     const lead = await createLead({
+      tenantId: getSiteTenantId(), // centrale tenant-resolutie (Sprint 3)
       status: "QUALIFIED",
       source: "ai_assistant",
       intent: "appointment",

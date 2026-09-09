@@ -6,7 +6,10 @@ import {
   type LeadEventSql,
 } from "../lib/customer-zero/persistence/lead-events.ts";
 
+const TENANT = "11111111-1111-4111-8111-111111111111";
+
 interface RecordedCall {
+  tenantId: unknown;
   leadId: unknown;
   conversationId: unknown;
   messageId: unknown;
@@ -19,12 +22,13 @@ function fakeSql(): { sql: LeadEventSql; calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   const sql: LeadEventSql = async (_strings, ...values) => {
     calls.push({
-      leadId: values[0],
-      conversationId: values[1],
-      messageId: values[2],
-      eventType: String(values[3]),
-      source: String(values[4]),
-      origin: String(values[5]),
+      tenantId: String(values[0]),
+      leadId: values[1],
+      conversationId: values[2],
+      messageId: values[3],
+      eventType: String(values[4]),
+      source: String(values[5]),
+      origin: String(values[6]),
     });
     return [];
   };
@@ -35,6 +39,7 @@ test("records an assistant commercial intent event", async () => {
   const { sql, calls } = fakeSql();
   await recordLeadEvent(sql, {
     conversationId: "conv-1",
+    tenantId: TENANT,
     eventType: "assistant_commercial_intent_detected",
     source: "ai_assistant",
     origin: "live_assistant",
@@ -51,6 +56,7 @@ test("records a lead created event with lead id", async () => {
   const { sql, calls } = fakeSql();
   await recordLeadEvent(sql, {
     leadId: "lead-1",
+    tenantId: TENANT,
     eventType: "lead_created",
     source: "ai_assistant",
     origin: "live_assistant",
@@ -65,6 +71,7 @@ test("records a lead qualified event", async () => {
   await recordLeadEvent(sql, {
     leadId: "lead-1",
     conversationId: "conv-1",
+    tenantId: TENANT,
     eventType: "lead_qualified",
     source: "ai_assistant",
     origin: "live_assistant",
@@ -79,6 +86,7 @@ test("correlates the event to the triggering message id", async () => {
   await recordLeadEvent(sql, {
     conversationId: "conv-1",
     messageId: "msg-7",
+    tenantId: TENANT,
     eventType: "assistant_commercial_intent_detected",
     source: "ai_assistant",
     origin: "live_assistant",
@@ -88,9 +96,9 @@ test("correlates the event to the triggering message id", async () => {
 
 test("emits exactly one insert per invocation (no duplicates)", async () => {
   const { sql, calls } = fakeSql();
-  await recordLeadEvent(sql, { eventType: "lead_created", source: "x", origin: "manual" });
+  await recordLeadEvent(sql, { tenantId: TENANT, eventType: "lead_created", source: "x", origin: "manual" });
   assert.equal(calls.length, 1);
-  await recordLeadEvent(sql, { eventType: "lead_created", source: "x", origin: "manual" });
+  await recordLeadEvent(sql, { tenantId: TENANT, eventType: "lead_created", source: "x", origin: "manual" });
   assert.equal(calls.length, 2);
 });
 
@@ -98,6 +106,7 @@ test("undefined ids are written as null (nullable FK columns)", async () => {
   const { sql, calls } = fakeSql();
   await recordLeadEvent(sql, {
     conversationId: "conv-1",
+    tenantId: TENANT,
     eventType: "assistant_commercial_intent_detected",
     source: "ai_assistant",
     origin: "live_assistant",
@@ -111,6 +120,7 @@ test("a failed event write does not corrupt the flow", async () => {
     throw new Error("database unavailable");
   };
   await recordLeadEvent(throwing, {
+    tenantId: TENANT,
     eventType: "lead_created",
     source: "ai_assistant",
     origin: "live_assistant",

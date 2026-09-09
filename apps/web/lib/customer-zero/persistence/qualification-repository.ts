@@ -18,6 +18,8 @@ export type QualificationSql = (
 export type QualificationConfidence = "LOW" | "MEDIUM" | "HIGH";
 
 export interface CreateQualificationInput {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   leadId: string;
   score: number;
   confidence: QualificationConfidence;
@@ -38,6 +40,7 @@ export async function createQualification(
 ): Promise<PersistedQualification> {
   const rows = await sql`
     INSERT INTO lead_qualifications (
+      tenant_id,
       lead_id,
       score,
       confidence,
@@ -48,6 +51,7 @@ export async function createQualification(
       metadata
     )
     VALUES (
+      ${input.tenantId}::uuid,
       ${input.leadId}::uuid,
       ${input.score},
       ${input.confidence},

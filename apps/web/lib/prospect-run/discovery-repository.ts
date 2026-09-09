@@ -17,6 +17,8 @@ export type DiscoverySql = (
 ) => Promise<unknown[]>;
 
 export interface UpsertCompanyInput {
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 3). */
+  tenantId: string;
   name: string;
   domain: string;
   industry?: string;
@@ -50,10 +52,11 @@ export async function upsertCompany(
 ): Promise<{ companyId: string; created: boolean }> {
   const inserted = await sql`
     INSERT INTO companies (
-      name, domain, industry, location, discovery_source,
+      tenant_id, name, domain, industry, location, discovery_source,
       website_research, ai_detection, last_checked_at
     )
     VALUES (
+      ${input.tenantId}::uuid,
       ${input.name},
       ${input.domain},
       ${input.industry ?? null},
@@ -63,7 +66,7 @@ export async function upsertCompany(
       ${input.aiDetection ? JSON.stringify(input.aiDetection) : null}::jsonb,
       NOW()
     )
-    ON CONFLICT (domain) DO NOTHING
+    ON CONFLICT (tenant_id, domain) DO NOTHING
     RETURNING company_id
   `;
   const first = inserted[0] as { company_id?: string } | undefined;
@@ -81,7 +84,8 @@ export async function upsertCompany(
       website_research = ${input.websiteResearch ? JSON.stringify(input.websiteResearch) : null}::jsonb,
       ai_detection = ${input.aiDetection ? JSON.stringify(input.aiDetection) : null}::jsonb,
       last_checked_at = NOW()
-    WHERE domain = ${input.domain}
+    WHERE tenant_id = ${input.tenantId}::uuid
+      AND domain = ${input.domain}
     RETURNING company_id
   `;
   const row = updated[0] as { company_id?: string } | undefined;
@@ -93,6 +97,7 @@ export async function upsertCompany(
 
 export async function getCompanyByDomain(
   sql: DiscoverySql,
+  tenantId: string,
   domain: string,
 ): Promise<CompanyRecord | null> {
   const rows = await sql`
@@ -100,7 +105,8 @@ export async function getCompanyByDomain(
       company_id, name, domain, industry, location, discovery_source,
       website_research, ai_detection, last_checked_at, created_at
     FROM companies
-    WHERE domain = ${domain}
+    WHERE tenant_id = ${tenantId}::uuid
+      AND domain = ${domain}
     LIMIT 1
   `;
   const row = rows[0] as Record<string, unknown> | undefined;
@@ -125,13 +131,15 @@ export async function getCompanyByDomain(
  */
 export async function hasFreshResearch(
   sql: DiscoverySql,
+  tenantId: string,
   domain: string,
   maxAgeMs: number,
 ): Promise<boolean> {
   const rows = await sql`
     SELECT 1
     FROM companies
-    WHERE domain = ${domain}
+    WHERE tenant_id = ${tenantId}::uuid
+      AND domain = ${domain}
       AND last_checked_at IS NOT NULL
       AND last_checked_at > NOW() - (${maxAgeMs}::bigint || ' milliseconds')::interval
     LIMIT 1

@@ -29,6 +29,7 @@ import {
   verifyAssistantApiKey,
 } from "@/lib/assistant/auth";
 import { RateLimiter } from "@/lib/security/rate-limit";
+import { getSiteTenantId } from "@/lib/tenancy";
 
 export const runtime = "nodejs";
 
@@ -124,16 +125,19 @@ function getDatabase() {
 
 async function createConversation(
   sql: ReturnType<typeof postgres>,
+  tenantId: string,
   sessionId: string,
   attribution: Attribution = {},
 ): Promise<string> {
   const created = await sql`
     INSERT INTO conversations (
+      tenant_id,
       source,
       visitor_session_id,
       metadata
     )
     VALUES (
+      ${tenantId}::uuid,
       'ai_assistant',
       ${sessionId},
       ${sql.json(attribution)}::jsonb
@@ -269,6 +273,9 @@ export async function POST(request: Request) {
 
   try {
     sql = getDatabase();
+    // Eén centrale tenant-resolutie voor de publieke site (Sprint 3/Fase F):
+    // later vervangbaar door authenticated tenant resolution.
+    const tenantId = getSiteTenantId();
 
     /*
      * ----------------------------------------------------------
@@ -286,6 +293,7 @@ export async function POST(request: Request) {
         SELECT conversation_id
         FROM conversations
         WHERE conversation_id = ${conversationId}::uuid
+          AND tenant_id = ${tenantId}::uuid
           AND visitor_session_id = ${sessionId}
         LIMIT 1
       `;
@@ -293,9 +301,9 @@ export async function POST(request: Request) {
       resolvedConversationId =
         owned.length > 0
           ? owned[0].conversation_id
-          : await createConversation(sql, sessionId, attribution);
+          : await createConversation(sql, tenantId, sessionId, attribution);
     } else {
-      resolvedConversationId = await createConversation(sql, sessionId, attribution);
+      resolvedConversationId = await createConversation(sql, tenantId, sessionId, attribution);
     }
 
     /*
@@ -310,6 +318,7 @@ export async function POST(request: Request) {
       SELECT role, content
       FROM conversation_messages
       WHERE conversation_id = ${resolvedConversationId}::uuid
+        AND tenant_id = ${tenantId}::uuid
       ORDER BY sequence_number DESC
       LIMIT ${MAX_HISTORY_MESSAGES}
     `;
@@ -326,18 +335,21 @@ export async function POST(request: Request) {
       SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_sequence
       FROM conversation_messages
       WHERE conversation_id = ${resolvedConversationId}::uuid
+        AND tenant_id = ${tenantId}::uuid
     `;
 
     const nextSequence = Number(sequenceResult[0].next_sequence);
 
     const insertedMessage = await sql`
       INSERT INTO conversation_messages (
+        tenant_id,
         conversation_id,
         role,
         content,
         sequence_number
       )
       VALUES (
+        ${tenantId}::uuid,
         ${resolvedConversationId}::uuid,
         'user',
         ${message},
@@ -350,6 +362,7 @@ export async function POST(request: Request) {
     if (nextSequence === 1) {
       await sql`
         INSERT INTO lead_events (
+          tenant_id,
           conversation_id,
           message_id,
           event_type,
@@ -358,6 +371,7 @@ export async function POST(request: Request) {
           metadata
         )
         VALUES (
+          ${tenantId}::uuid,
           ${resolvedConversationId}::uuid,
           ${userMessageId}::uuid,
           'assistant_conversation_started',
@@ -375,6 +389,7 @@ export async function POST(request: Request) {
       SET
         last_activity_at = NOW()
       WHERE conversation_id = ${resolvedConversationId}::uuid
+        AND tenant_id = ${tenantId}::uuid
     `;
 
     /*
@@ -486,12 +501,14 @@ export async function POST(request: Request) {
 
     await sql`
       INSERT INTO conversation_messages (
+        tenant_id,
         conversation_id,
         role,
         content,
         sequence_number
       )
       VALUES (
+        ${tenantId}::uuid,
         ${resolvedConversationId}::uuid,
         'assistant',
         ${assistantMessage},
@@ -504,6 +521,7 @@ export async function POST(request: Request) {
       SET
         last_activity_at = NOW()
       WHERE conversation_id = ${resolvedConversationId}::uuid
+        AND tenant_id = ${tenantId}::uuid
     `;
 
     /*
@@ -518,6 +536,7 @@ export async function POST(request: Request) {
      */
     await maybeRunCustomerZeroOrchestration(
       {
+        tenantId,
         conversationId: resolvedConversationId,
         messages: [...history, { role: "user", content: message }],
         messageId: userMessageId ?? undefined,

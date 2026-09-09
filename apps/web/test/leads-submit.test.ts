@@ -6,6 +6,8 @@ import { submitLead } from "../lib/leads/submit.ts";
 import type { LeadNotifier } from "../lib/leads/notify.ts";
 import type { LeadSubmission } from "../lib/leads/validation.ts";
 
+const TENANT = "11111111-1111-4111-8111-111111111111";
+
 const VALID: LeadSubmission = {
   name: "Jan Jansen",
   email: "jan@acme.nl",
@@ -23,14 +25,15 @@ function makeSql(failInsert = false) {
     if (text.includes("INSERT INTO contact_leads")) {
       if (failInsert) throw new Error("database unavailable");
       inserts.push({
-        name: values[0],
-        email: values[1],
-        phone: values[2],
-        company: values[3],
-        service: values[4],
-        message: values[5],
-        status: values[6],
-        source: values[7],
+        tenantId: values[0],
+        name: values[1],
+        phone: values[3],
+        company: values[4],
+        email: values[2],
+        message: values[6],
+        service: values[5],
+        status: values[7],
+        source: values[8],
       });
       return [{ lead_id: "lead-1", created_at: "2026-09-02T08:00:00.000Z" }];
     }
@@ -51,7 +54,7 @@ test("leads submit: geldige lead → insert met defaults + notificatie + leadId"
   const shop = makeSql();
   const notifier = countingNotifier();
   const result = await submitLead(
-    { sql: shop.sql, notifier, now: () => "2026-09-02T08:00:00.000Z", log: () => {} },
+    { tenantId: TENANT, sql: shop.sql, notifier, now: () => "2026-09-02T08:00:00.000Z", log: () => {} },
     VALID,
   );
   assert.deepEqual(result, { ok: true, discarded: false, leadId: "lead-1" });
@@ -66,7 +69,7 @@ test("leads submit: honeypot → stil succes ZONDER insert en zonder notificatie
   const shop = makeSql();
   const notifier = countingNotifier();
   const result = await submitLead(
-    { sql: shop.sql, notifier, log: () => {} },
+    { tenantId: TENANT, sql: shop.sql, notifier, log: () => {} },
     { ...VALID, website: "https://spam.example.com" },
   );
   assert.deepEqual(result, { ok: true, discarded: true });
@@ -77,7 +80,7 @@ test("leads submit: honeypot → stil succes ZONDER insert en zonder notificatie
 test("leads submit: database-fout → STORAGE_FAILED (geen succes, geen notificatie)", async () => {
   const shop = makeSql(true); // insert gooit
   const notifier = countingNotifier();
-  const result = await submitLead({ sql: shop.sql, notifier, log: () => {} }, VALID);
+  const result = await submitLead({ tenantId: TENANT, sql: shop.sql, notifier, log: () => {} }, VALID);
   assert.deepEqual(result, { ok: false, error: "STORAGE_FAILED" });
   assert.equal(notifier.calls.count, 0); // nooit notificeren als de lead niet is opgeslagen
 });
@@ -89,7 +92,7 @@ test("leads submit: notificatie-fout → lead blijft, succes retourneren (DB > m
   }) as LeadNotifier;
   const logs: string[] = [];
   const result = await submitLead(
-    { sql: shop.sql, notifier: failingNotifier, log: (m) => void logs.push(m) },
+    { tenantId: TENANT, sql: shop.sql, notifier: failingNotifier, log: (m) => void logs.push(m) },
     VALID,
   );
   assert.deepEqual(result, { ok: true, discarded: false, leadId: "lead-1" });
@@ -101,7 +104,7 @@ test("leads submit: zonder notifier → lead wordt wél opgeslagen (gelogd)", as
   const shop = makeSql();
   const logs: string[] = [];
   const result = await submitLead(
-    { sql: shop.sql, notifier: null, log: (m) => void logs.push(m) },
+    { tenantId: TENANT, sql: shop.sql, notifier: null, log: (m) => void logs.push(m) },
     VALID,
   );
   assert.deepEqual(result, { ok: true, discarded: false, leadId: "lead-1" });
@@ -111,7 +114,7 @@ test("leads submit: zonder notifier → lead wordt wél opgeslagen (gelogd)", as
 
 test("leads repository: insert retourneert leadId + createdAt", async () => {
   const shop = makeSql();
-  const inserted = await insertContactLead(shop.sql, {
+  const inserted = await insertContactLead(shop.sql, { tenantId: TENANT,
     name: "Jan Jansen",
     email: "jan@acme.nl",
     phone: null,
