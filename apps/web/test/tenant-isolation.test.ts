@@ -284,6 +284,43 @@ test("tenant: legacy backfill — migratie 011 backfilt élke geharde tabel naar
   assert.equal(migration.includes("DELETE FROM"), false);
 });
 
+test("tenant: migratie 012 — 002-runtime-tabellen krijgen tenant ownership (audit Sprint 4)", () => {
+  // Audit (Sprint 4): runtime-records beschrijven klant-/tenant-executie-data
+  // (post-lead runs, approvals, executions, evidence, handoffs); er is geen
+  // system-globale run → alle zes tabellen tenant-scoped, geen tweede model.
+  const migration = readFileSync(
+    join(import.meta.dirname, "..", "lib", "db", "migrations", "012_tenant_runtime_ownership.sql"),
+    "utf8",
+  );
+  const runtimeTables = [
+    "agent_runs",
+    "runtime_tasks",
+    "runtime_approvals",
+    "runtime_executions",
+    "runtime_evidence",
+    "runtime_handoffs",
+  ];
+  for (const table of runtimeTables) {
+    assert.ok(
+      migration.includes(`ALTER TABLE ${table}\n  ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES prospect_tenants(tenant_id);`),
+      `${table}: kolom/FK ontbreekt`,
+    );
+    assert.ok(
+      migration.includes(`UPDATE ${table} SET tenant_id = '11111111-1111-4111-8111-111111111111'`),
+      `${table}: backfill ontbreekt`,
+    );
+    assert.ok(
+      migration.includes(`ALTER TABLE ${table} ALTER COLUMN tenant_id SET NOT NULL;`),
+      `${table}: NOT NULL ontbreekt`,
+    );
+  }
+  // Geen destructieve statements in de migratie.
+  assert.equal(migration.includes("DROP TABLE"), false);
+  assert.equal(migration.includes("TRUNCATE"), false);
+  assert.equal(migration.includes("DELETE FROM"), false);
+  assert.equal(migration.includes("DROP COLUMN"), false);
+});
+
 test("tenant: shop-products zijn GLOBAL (catalogus, geen tenant-data)", async () => {
   // Catalogus-producten worden per slug opgehaald zonder tenant-filter —
   // bewust: shop_products is geen klantdata (GLOBAL-classificatie).

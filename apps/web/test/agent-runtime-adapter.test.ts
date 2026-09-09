@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import * as core from "../../../packages/agent-core/src/index.ts";
@@ -11,6 +11,8 @@ import {
   type AssistantToolCore,
   type RuntimeSql,
 } from "../lib/agent-runtime/runtime-adapter.ts";
+
+const TENANT = "11111111-1111-4111-8111-111111111111";
 
 function toolCall(overrides: Partial<AssistantToolCall> = {}): AssistantToolCall {
   return {
@@ -79,14 +81,14 @@ function buildToolCore(options: {
 }
 
 test("invalid conversation id is refused before any database access", async () => {
-  const outcome = await runConversationRuntimeTask("not-a-uuid");
+  const outcome = await runConversationRuntimeTask("not-a-uuid", TENANT);
   assert.equal(outcome.ran, false);
   assert.equal(outcome.skipped, "invalid_conversation_id");
   assert.equal(outcome.error, undefined);
 });
 
 test("missing input is refused (empty string)", async () => {
-  const outcome = await runConversationRuntimeTask("");
+  const outcome = await runConversationRuntimeTask("", TENANT);
   assert.equal(outcome.ran, false);
   assert.equal(outcome.skipped, "invalid_conversation_id");
 });
@@ -102,11 +104,13 @@ test("atomically claims only one runtime run per conversation", async () => {
   const first = await claimConversationRuntimeRun(
     sql,
     "11111111-1111-4111-8111-111111111111",
+    TENANT,
     "run_11111111-1111-4111-8111-111111111111",
   );
   const second = await claimConversationRuntimeRun(
     sql,
     "11111111-1111-4111-8111-111111111111",
+    TENANT,
     "run_11111111-1111-4111-8111-111111111111",
   );
 
@@ -123,6 +127,7 @@ test("atomically claims only one runtime run per conversation", async () => {
 test("bridge: unknown tool is rejected before any execution", async () => {
   const result = await executeAssistantToolCall(
     toolCall({ name: "some_other_tool" }),
+    { tenantId: TENANT },
   );
   assert.equal(result.ok, false);
   assert.equal(result.error, "UNKNOWN_TOOL");
@@ -132,11 +137,13 @@ test("bridge: unknown tool is rejected before any execution", async () => {
 test("bridge: malformed arguments and missing URL are rejected", async () => {
   const malformed = await executeAssistantToolCall(
     toolCall({ arguments: "not-json" }),
+    { tenantId: TENANT },
   );
   assert.equal(malformed.error, "INVALID_TOOL_ARGUMENTS");
 
   const missing = await executeAssistantToolCall(
     toolCall({ arguments: "{}" }),
+    { tenantId: TENANT },
   );
   assert.equal(missing.error, "MISSING_URL");
 });
@@ -145,6 +152,7 @@ test("bridge: localhost and IP literals are blocked before the runtime", async (
   for (const url of ["http://localhost:3000", "http://127.0.0.1/", "http://192.168.1.1/"]) {
     const result = await executeAssistantToolCall(
       toolCall({ arguments: JSON.stringify({ url }) }),
+      { tenantId: TENANT },
     );
     assert.equal(result.ok, false, url);
     assert.ok(["LOCALHOST_BLOCKED", "IP_LITERAL_BLOCKED"].includes(result.error ?? ""), url);
@@ -154,6 +162,7 @@ test("bridge: localhost and IP literals are blocked before the runtime", async (
 
 test("bridge: private address via DNS is blocked (metadata endpoint)", async () => {
   const result = await executeAssistantToolCall(toolCall(), {
+    tenantId: TENANT,
     lookup: async () => ["169.254.169.254"],
   });
   assert.equal(result.ok, false);
@@ -163,6 +172,7 @@ test("bridge: private address via DNS is blocked (metadata endpoint)", async () 
 test("bridge: unsupported scheme is rejected", async () => {
   const result = await executeAssistantToolCall(
     toolCall({ arguments: JSON.stringify({ url: "file:///etc/passwd" }) }),
+    { tenantId: TENANT },
   );
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /INVALID_URL/);
@@ -175,7 +185,7 @@ test("bridge: tool call passes the real gate and reaches the adapter", async () 
   const core = buildToolCore({
     adapter: fakeAdapter({ status: 200, ok: true, url: "https://example.com", body: html, truncated: false }),
   });
-  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
+  const result = await executeAssistantToolCall(toolCall(), { core, tenantId: TENANT, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, true);
   assert.equal(result.executionStatus, "SUCCEEDED");
   const summary = result.output as { title: string | null; pagesChecked: string[]; chatbotDetection: { status: string } | null };
@@ -189,7 +199,7 @@ test("bridge: disabled tool is blocked by the gate (NOT executed)", async () => 
     adapter: fakeAdapter({ status: 200, body: "x" }),
     enabled: false,
   });
-  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
+  const result = await executeAssistantToolCall(toolCall(), { core, tenantId: TENANT, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /disabled/i);
   assert.equal(result.executionStatus, "REJECTED");
@@ -197,7 +207,7 @@ test("bridge: disabled tool is blocked by the gate (NOT executed)", async () => 
 
 test("bridge: missing adapter is NOT_IMPLEMENTED (nothing executes)", async () => {
   const core = buildToolCore({ adapter: undefined });
-  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
+  const result = await executeAssistantToolCall(toolCall(), { core, tenantId: TENANT, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /No adapter|unavailable/i);
   assert.equal(result.executionStatus, "NOT_IMPLEMENTED");
@@ -210,7 +220,7 @@ test("bridge: policy denies execution when the agent lacks the permission", asyn
     adapter: fakeAdapter({ status: 200, body: "x" }),
     allowedTools: [],
   });
-  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
+  const result = await executeAssistantToolCall(toolCall(), { core, tenantId: TENANT, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /prohibited|denied|permission/i);
   assert.equal(result.executionStatus, "REJECTED");
@@ -234,7 +244,7 @@ test("bridge: execution failure never throws; structured error is returned", asy
     }),
   };
   const core = buildToolCore({ adapter });
-  const result = await executeAssistantToolCall(toolCall(), { core, lookup: async () => ["93.184.216.34"] });
+  const result = await executeAssistantToolCall(toolCall(), { core, tenantId: TENANT, lookup: async () => ["93.184.216.34"] });
   assert.equal(result.ok, false);
   assert.equal(result.error, "response exceeds maxBytes");
   assert.equal(result.executionStatus, "FAILED");

@@ -1,9 +1,16 @@
 /**
- * Postgres implementation of the agent runtime recorder (TASK 22).
+ * Postgres implementation of the agent runtime recorder (TASK 22, Sprint 4).
  *
  * Consumes the same append-only entry contract as the agent-core
  * RunRecorder port (structurally identical; agent-core is not imported here
  * to keep the Next.js build independent of the agent-core package).
+ *
+ * Tenant ownership (Sprint 4): every runtime record is tenant-correlatable
+ * (tenant_id NOT NULL via migration 012). Runtime records describe
+ * customer/tenant execution data (runs, tasks, approvals, executions,
+ * evidence, handoffs) — there is no system-global run in the current
+ * product; the site tenant (or an explicit tenant) owns every record.
+ * No second tenancy model: tenant_id REFERENCES prospect_tenants.
  *
  * Writes:
  * - agent_runs          : run state transitions
@@ -31,6 +38,8 @@ export interface RunRecordEntry {
   readonly taskId: string | null;
   readonly agentId: string | null;
   readonly toolId: string | null;
+  /** Verplicht: NO TENANT = NO EXECUTION (Sprint 4 tenant-correlatie). */
+  readonly tenantId: string;
   readonly timestamp: string;
   readonly meta?: Readonly<Record<string, unknown>>;
   readonly data?: Readonly<Record<string, unknown>>;
@@ -77,6 +86,7 @@ export class PostgresRunRecorder {
   #recordRun(entry: RunRecordEntry): Promise<unknown[]> {
     return this.#sql`
       INSERT INTO agent_runs (
+        tenant_id,
         external_run_id,
         state,
         task_id,
@@ -86,6 +96,7 @@ export class PostgresRunRecorder {
         metadata
       )
       VALUES (
+        ${entry.tenantId}::uuid,
         ${entry.runId},
         ${entry.state},
         ${entry.taskId ?? null},
@@ -101,6 +112,7 @@ export class PostgresRunRecorder {
     const data = entry.data ?? {};
     return this.#sql`
       INSERT INTO runtime_tasks (
+        tenant_id,
         task_id,
         run_id,
         title,
@@ -114,6 +126,7 @@ export class PostgresRunRecorder {
         metadata
       )
       VALUES (
+        ${entry.tenantId}::uuid,
         ${entry.taskId ?? null},
         ${entry.runId},
         ${data.title ?? null},
@@ -133,6 +146,7 @@ export class PostgresRunRecorder {
     const data = entry.data ?? {};
     return this.#sql`
       INSERT INTO runtime_approvals (
+        tenant_id,
         approval_id,
         run_id,
         task_id,
@@ -145,6 +159,7 @@ export class PostgresRunRecorder {
         metadata
       )
       VALUES (
+        ${entry.tenantId}::uuid,
         ${data.approvalId ?? null},
         ${entry.runId},
         ${entry.taskId ?? null},
@@ -163,6 +178,7 @@ export class PostgresRunRecorder {
     const data = entry.data ?? {};
     return this.#sql`
       INSERT INTO runtime_executions (
+        tenant_id,
         execution_id,
         run_id,
         task_id,
@@ -177,6 +193,7 @@ export class PostgresRunRecorder {
         metadata
       )
       VALUES (
+        ${entry.tenantId}::uuid,
         ${data.executionId ?? null},
         ${entry.runId},
         ${entry.taskId ?? null},
@@ -197,6 +214,7 @@ export class PostgresRunRecorder {
     const data = entry.data ?? {};
     return this.#sql`
       INSERT INTO runtime_evidence (
+        tenant_id,
         evidence_id,
         run_id,
         task_id,
@@ -209,6 +227,7 @@ export class PostgresRunRecorder {
         metadata
       )
       VALUES (
+        ${entry.tenantId}::uuid,
         ${data.evidenceId ?? null},
         ${entry.runId},
         ${entry.taskId ?? null},
@@ -227,6 +246,7 @@ export class PostgresRunRecorder {
     const data = entry.data ?? {};
     return this.#sql`
       INSERT INTO runtime_handoffs (
+        tenant_id,
         handoff_id,
         run_id,
         task_id,
@@ -238,6 +258,7 @@ export class PostgresRunRecorder {
         metadata
       )
       VALUES (
+        ${entry.tenantId}::uuid,
         ${data.handoffId ?? null},
         ${entry.runId},
         ${entry.taskId ?? null},

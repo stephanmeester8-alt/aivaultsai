@@ -15,6 +15,7 @@ import {
 } from "../lib/assistant/research-summary.ts";
 
 const PUBLIC_LOOKUP = async () => ["93.184.216.34"];
+const TENANT = "11111111-1111-4111-8111-111111111111";
 
 function toolCall(url: string): AssistantToolCall {
   return {
@@ -134,7 +135,7 @@ test("A: small HTML response is researched successfully", async () => {
   ${"<p>Wij leveren kwaliteit sinds 1998. Ons team staat voor u klaar met advies en ondersteuning op maat.</p>".repeat(14)}
   </body></html>`;
   const core = buildCore(pageAdapter({ "https://acme.nl": { body: strongPage } }));
-  const result = await executeAssistantToolCall(toolCall("https://acme.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://acme.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal(result.ok, true);
   const summary = result.output as ResearchSummary;
   assert.equal(summary.title, "Acme BV");
@@ -148,7 +149,7 @@ test("B: large HTML response is bounded, not failed (truncated flag + limitation
   const core = buildCore(
     pageAdapter({ "https://groot.nl": { body: big, truncated: true } }),
   );
-  const result = await executeAssistantToolCall(toolCall("https://groot.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://groot.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal(result.ok, true);
   const summary = result.output as ResearchSummary;
   assert.equal(summary.truncated, true);
@@ -198,7 +199,7 @@ test("E: weak homepage triggers a bounded subpage probe (max pages enforced)", a
     },
   };
   const core = buildCore(adapter);
-  const result = await executeAssistantToolCall(toolCall("https://x.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://x.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal(result.ok, true);
   const summary = result.output as ResearchSummary;
   assert.ok(summary.pagesChecked.length >= 2, `expected subpage probe, got ${summary.pagesChecked.length}`);
@@ -231,18 +232,19 @@ test("E2: strong homepage does not probe subpages (no unnecessary crawling)", as
     },
   };
   const core = buildCore(adapter);
-  const result = await executeAssistantToolCall(toolCall("https://acme.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://acme.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal((result.output as ResearchSummary).pagesChecked.length, 1);
   assert.equal(fetches, 1);
 });
 
 test("G-I: localhost, private IP and metadata addresses are blocked", async () => {
   for (const url of ["http://localhost:3000", "http://127.0.0.1/", "http://192.168.1.1/"]) {
-    const result = await executeAssistantToolCall(toolCall(url), { lookup: PUBLIC_LOOKUP });
+    const result = await executeAssistantToolCall(toolCall(url), { tenantId: TENANT, lookup: PUBLIC_LOOKUP });
     assert.equal(result.ok, false, url);
     assert.equal(result.executionStatus, "REJECTED");
   }
   const metadata = await executeAssistantToolCall(toolCall("https://metadata.internal"), {
+    tenantId: TENANT,
     lookup: async () => ["169.254.169.254"],
   });
   assert.equal(metadata.ok, false);
@@ -250,7 +252,7 @@ test("G-I: localhost, private IP and metadata addresses are blocked", async () =
 });
 
 test("J: unsupported scheme is blocked", async () => {
-  const result = await executeAssistantToolCall(toolCall("file:///etc/passwd"), { lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("file:///etc/passwd"), { tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal(result.ok, false);
   assert.match(result.error ?? "", /INVALID_URL/);
 });
@@ -273,7 +275,7 @@ test("K: fetch failure is graceful (structured error, no throw)", async () => {
     }),
   };
   const core = buildCore(adapter);
-  const result = await executeAssistantToolCall(toolCall("https://slow.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://slow.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal(result.ok, false);
   assert.equal(result.error, "FETCH_TIMEOUT");
 });
@@ -315,7 +317,7 @@ test("L: partial research keeps homepage evidence when a subpage fails", async (
     },
   };
   const core = buildCore(adapter);
-  const result = await executeAssistantToolCall(toolCall("https://x.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://x.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   assert.equal(result.ok, true);
   const summary = result.output as ResearchSummary;
   assert.ok(summary.limitations.some((l) => l.startsWith("subpage_failed")), JSON.stringify(summary.limitations));
@@ -326,7 +328,7 @@ test("M: chatbot script present -> YES with evidence and technologies", async ()
   const html = `<html><head><script src="https://widget.intercom.io/widget/abc"></script></head>
   <body><h1>Acme</h1><p>Wij leveren kwaliteit sinds 1998. Ons team staat voor u klaar met advies en ondersteuning op maat.</p></body></html>`;
   const core = buildCore(pageAdapter({ "https://acme.nl": { body: html } }));
-  const result = await executeAssistantToolCall(toolCall("https://acme.nl"), { core, lookup: PUBLIC_LOOKUP });
+  const result = await executeAssistantToolCall(toolCall("https://acme.nl"), { core, tenantId: TENANT, lookup: PUBLIC_LOOKUP });
   const summary = result.output as ResearchSummary;
   assert.equal(summary.chatbotDetection?.status, "yes");
   assert.ok(summary.technologies.includes("Intercom"));

@@ -83,12 +83,14 @@ export async function getWorkSessionByKey(
 
 export async function getWorkSession(
   sql: EmployeeSql,
+  tenantId: string,
   sessionId: string,
 ): Promise<EmployeeWorkSessionRecord | null> {
   const rows = await sql`
     SELECT session_id, tenant_id, session_key, status, config, summary, created_at, updated_at
     FROM employee_work_sessions
-    WHERE session_id = ${sessionId}::uuid
+    WHERE tenant_id = ${tenantId}::uuid
+      AND session_id = ${sessionId}::uuid
     LIMIT 1
   `;
   const row = rows[0] as Record<string, unknown> | undefined;
@@ -97,6 +99,7 @@ export async function getWorkSession(
 
 export async function updateWorkSessionStatus(
   sql: EmployeeSql,
+  tenantId: string,
   sessionId: string,
   status: WorkSessionStatus,
   summary: EmployeeWorkSessionSummary | null,
@@ -108,7 +111,8 @@ export async function updateWorkSessionStatus(
         started_at = COALESCE(started_at, NOW()),
         completed_at = CASE WHEN ${status} IN ('COMPLETED', 'FAILED', 'CANCELLED')
           THEN NOW() ELSE completed_at END
-    WHERE session_id = ${sessionId}::uuid
+    WHERE tenant_id = ${tenantId}::uuid
+      AND session_id = ${sessionId}::uuid
   `;
 }
 

@@ -14,6 +14,8 @@ export interface RouteContext {
 
 interface ActionBody {
   decision: "approve" | "reject";
+  /** Verplicht: sessie-lookup/update is per (tenantId, sessionId) (Sprint 4). */
+  tenantId: string;
   email?: string;
   optedOut?: boolean;
   warmedUp?: boolean;
@@ -26,6 +28,7 @@ function validBody(value: unknown): value is ActionBody {
   if (!value || typeof value !== "object") return false;
   const body = value as Record<string, unknown>;
   if (body.decision !== "approve" && body.decision !== "reject") return false;
+  if (typeof body.tenantId !== "string" || body.tenantId.trim().length === 0) return false;
   if (body.decision === "approve") {
     if (typeof body.email !== "string" || !EMAIL_RE.test(body.email)) return false;
   }
@@ -62,6 +65,7 @@ export async function POST(request: Request, context: RouteContext) {
     const employeeSql = sql as unknown as EmployeeSql;
     if (body.decision === "approve") {
       const result = await approveAction(
+        body.tenantId,
         sessionId,
         actionId,
         {
@@ -74,7 +78,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
       return NextResponse.json(result, { status: 200 });
     }
-    const result = await rejectAction(sessionId, actionId, { sql: employeeSql });
+    const result = await rejectAction(body.tenantId, sessionId, actionId, { sql: employeeSql });
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
     console.error(

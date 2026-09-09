@@ -1,11 +1,12 @@
 /**
- * Assistant tool-calling bridge (TASK: connect website assistant to runtime).
+ * Assistant tool-calling bridge (Sprint 4: unified live runtime).
  *
  * Pure, testable tool-loop logic for the OpenAI Responses API:
  * - the model may request ONE bounded tool per round: assistant_website_research
- * - every call is executed by the EXISTING Agent Runtime bridge
- *   (runtime-adapter.executeAssistantToolCall -> PolicyEngine -> ExecutionGate
- *   -> HttpAdapter -> evidence)
+ * - every call is executed by the caller-supplied unified live execution
+ *   (route → live-execution → SkillExecutionRouter → ToolRegistryV2-gateway
+ *   → gebonden executor → recorder); de tool-loop zelf is I/O-vrij en
+ *   beslist niets over permissies
  * - maximum 2 tool rounds; beyond that the loop stops safely with a fallback
  * - the model never performs HTTP itself and never decides permissions
  */

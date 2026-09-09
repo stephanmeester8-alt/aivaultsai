@@ -15,7 +15,10 @@ import {
   ASSISTANT_TOOLS,
   runAssistantToolLoop,
 } from "@/lib/assistant/tool-loop";
-import { executeAssistantToolCall } from "@/lib/agent-runtime/runtime-adapter";
+import {
+  executeLiveAssistantToolCall,
+} from "@/lib/assistant/live-execution";
+import type { ObservabilitySql } from "@/lib/observability/postgres-recorder";
 import {
   createDefaultFunnelDeps,
   maybeRunCustomerZeroOrchestration,
@@ -259,6 +262,11 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
+    // Server-log: exacte ontbrekende variabele voor de operator. De bezoeker
+    // krijgt bewust geen interne naam — alleen een nette 503-melding.
+    console.error(
+      "assistant: OPENAI_API_KEY is niet geconfigureerd — POST /api/assistant retourneert 503",
+    );
     return NextResponse.json(
       {
         error: "De AI-assistent is nog niet geconfigureerd.",
@@ -396,9 +404,15 @@ export async function POST(request: Request) {
      * ----------------------------------------------------------
      * 7. Ask OpenAI with bounded context, a hard timeout, and ONE
      *    controlled tool (assistant_website_research). Tool calls are
-     *    executed through the EXISTING Agent Runtime bridge (policy ->
-     *    execution gate -> HTTP adapter -> evidence) in a bounded loop of
-     *    at most two rounds; the model never fetches anything itself.
+     *    executed through the UNIFIED Sprint 1-3 pipeline (Sprint 4):
+     *
+     *      tool-call → deterministische skill-selectie (company.research)
+     *      → SkillExecutionRouter → tenant-invariant → policy → risk/
+     *      approval → ToolRegistryV2-gateway → gebonden executor →
+     *      recorder (tool_call_records + runtime-records)
+     *
+     *    in a bounded loop of at most two rounds; the model never fetches
+     *    anything itself and no adapter is ever called directly.
      * ----------------------------------------------------------
      */
 
@@ -474,7 +488,20 @@ export async function POST(request: Request) {
       message,
       firstResponse: first.data,
       modelCall: callModel,
-      executeTool: (call) => executeAssistantToolCall(call),
+      executeTool: (call) =>
+        executeLiveAssistantToolCall(
+          call,
+          {
+            tenantId,
+            conversationId: resolvedConversationId,
+            sessionId,
+            agentPermissions: ["API_REQUEST"], // live site-assistent: alleen read-only research
+          },
+          {
+            sql: sql as unknown as ObservabilitySql,
+            log: (message) => console.info(`[assistant-tool] ${message}`),
+          },
+        ),
     });
     const assistantMessage = loopResult.text;
 

@@ -22,9 +22,10 @@ export interface FunnelDeps {
   /**
    * Optional post-lead agent runtime step (Customer-Zero -> Agent Runtime).
    * Runs only when the orchestrator created a lead; idempotent per
-   * conversation; non-fatal.
+   * conversation; non-fatal. Tenant-aware (Sprint 4): runtime-records en de
+   * claim zijn per (tenantId, conversationId).
    */
-  runRuntimeTask?: (conversationId: string) => Promise<unknown>;
+  runRuntimeTask?: (conversationId: string, tenantId: string) => Promise<unknown>;
   /**
    * Optional internal notification when a conversation becomes a lead.
    * Runs only on lead creation (max once per conversation), never on
@@ -68,7 +69,7 @@ export async function maybeRunCustomerZeroOrchestration(
     // lead conversation. Never affects the assistant reply.
     if (result.leadCreated) {
       try {
-        await deps.runRuntimeTask?.(input.conversationId);
+        await deps.runRuntimeTask?.(input.conversationId, input.tenantId);
       } catch (error) {
         console.error(
           "[assistant-funnel] agent runtime task failed",
@@ -125,11 +126,11 @@ export function createDefaultFunnelDeps(): FunnelDeps {
       const { runCustomerZeroOrchestrator } = await import("./orchestrator");
       return runCustomerZeroOrchestrator(input);
     },
-    runRuntimeTask: async (conversationId) => {
+    runRuntimeTask: async (conversationId, tenantId) => {
       const { runConversationRuntimeTask } = await import(
         "../agent-runtime/runtime-adapter"
       );
-      return runConversationRuntimeTask(conversationId);
+      return runConversationRuntimeTask(conversationId, tenantId);
     },
     notifyLead: async (summary) => {
       // Lead-data server-side ophalen (nooit LLM-output vertrouwen) en de

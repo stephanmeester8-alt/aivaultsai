@@ -71,9 +71,15 @@ function makeEmployeeSql(options: { failFirstStepInsert?: boolean } = {}) {
       return [rec];
     }
     if (text.includes("FROM employee_work_sessions")) {
-      if (text.includes("WHERE tenant_id =")) {
+      if (text.includes("AND session_key =")) {
         const rows = [...state.sessions.values()].filter(
           (s) => s.tenant_id === values[0] && s.session_key === values[1],
+        );
+        return rows;
+      }
+      if (text.includes("AND session_id =")) {
+        const rows = [...state.sessions.values()].filter(
+          (s) => s.tenant_id === values[0] && s.session_id === values[1],
         );
         return rows;
       }
@@ -81,7 +87,9 @@ function makeEmployeeSql(options: { failFirstStepInsert?: boolean } = {}) {
       return rows;
     }
     if (text.includes("UPDATE employee_work_sessions")) {
-      const rec = [...state.sessions.values()].find((s) => s.session_id === values[3]);
+      const rec = [...state.sessions.values()].find(
+        (s) => s.tenant_id === values[3] && s.session_id === values[4],
+      );
       if (rec) {
         rec.status = values[0];
         if (values[1] != null) rec.summary = JSON.parse(String(values[1]));
@@ -222,6 +230,7 @@ test("human approval allows execution through the existing dispatcher", async ()
   const actionId = result.summary!.actions[0]!.actionId;
 
   const approval = await approveAction(
+    TENANT_A,
     result.sessionId,
     actionId,
     { email: "owner@acme.nl" },
@@ -232,7 +241,7 @@ test("human approval allows execution through the existing dispatcher", async ()
   assert.equal(sent, 1);
 
   // Session completes once no action is pending.
-  const stored = await getWorkSession(sql, result.sessionId);
+  const stored = await getWorkSession(sql, TENANT_A, result.sessionId);
   assert.equal(stored!.status, "COMPLETED");
 });
 
@@ -248,7 +257,7 @@ test("rejection stops execution and never touches the provider", async () => {
   const result = await startWorkSession(baseConfig(), employeeDeps(sql, { provider }));
   const actionId = result.summary!.actions[0]!.actionId;
 
-  const rejection = await rejectAction(result.sessionId, actionId, employeeDeps(sql));
+  const rejection = await rejectAction(TENANT_A, result.sessionId, actionId, employeeDeps(sql));
   assert.equal(rejection.actionStatus, "REJECTED");
   assert.equal(sent, 0);
 });
@@ -266,6 +275,7 @@ test("opt-out blocks email at the dispatcher gate", async () => {
   const actionId = result.summary!.actions[0]!.actionId;
 
   const approval = await approveAction(
+    TENANT_A,
     result.sessionId,
     actionId,
     { email: "owner@acme.nl", optedOut: true },
@@ -283,6 +293,7 @@ test("rate limit and warm-up blocks are enforced at dispatch", async () => {
   const actionId = result.summary!.actions[0]!.actionId;
 
   const rateBlocked = await approveAction(
+    TENANT_A,
     result.sessionId,
     actionId,
     { email: "owner@acme.nl", rateAllowed: false },
@@ -296,6 +307,7 @@ test("sending without a configured provider is blocked (fail-closed)", async () 
   const result = await startWorkSession(baseConfig(), employeeDeps(sql));
   const actionId = result.summary!.actions[0]!.actionId;
   const approval = await approveAction(
+    TENANT_A,
     result.sessionId,
     actionId,
     { email: "owner@acme.nl" },
@@ -371,7 +383,7 @@ test("work session can resume: an existing RUNNING session is returned", async (
   const { sql } = makeEmployeeSql();
   const config = baseConfig();
   const created = await createWorkSession(sql, config);
-  await updateWorkSessionStatus(sql, created.session.sessionId, "RUNNING", null);
+  await updateWorkSessionStatus(sql, TENANT_A, created.session.sessionId, "RUNNING", null);
 
   const result = await startWorkSession(config, employeeDeps(sql));
   assert.equal(result.started, false);
@@ -393,7 +405,7 @@ test("tenant isolation: separate sessions per tenant, no cross-tenant data", asy
 
   // Approving tenant A's action cannot touch tenant B's session.
   const actionId = a.summary!.actions[0]!.actionId;
-  const approval = await approveAction(a.sessionId, actionId, { email: "owner@acme.nl" }, employeeDeps(sql));
+  const approval = await approveAction(TENANT_A, a.sessionId, actionId, { email: "owner@acme.nl" }, employeeDeps(sql));
   assert.ok(["SENT", "BLOCKED"].includes(approval.actionStatus));
   const bAfter = [...state.sessions.values()].find((s) => s.session_id === b.sessionId)!;
   assert.equal(bAfter.status, "COMPLETED");

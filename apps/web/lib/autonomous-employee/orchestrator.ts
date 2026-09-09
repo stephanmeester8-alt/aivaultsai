@@ -146,7 +146,7 @@ export async function startWorkSession(
   if (!created) {
     if (session.status === "FAILED" || session.status === "CANCELLED") {
       // Safe retry: reuse the row, reset to PENDING and run again.
-      await updateWorkSessionStatus(deps.sql, session.sessionId, "PENDING", null);
+      await updateWorkSessionStatus(deps.sql, config.tenantId, session.sessionId, "PENDING", null);
       log(`session ${session.sessionKey} retried after ${session.status}`);
     } else {
       log(`session ${session.sessionKey} already ${session.status}; no duplicate run`);
@@ -160,7 +160,7 @@ export async function startWorkSession(
   const intelligenceCache = new Map<string, ProspectIntelligence>();
 
   try {
-    await updateWorkSessionStatus(deps.sql, sessionId, "RUNNING", null);
+    await updateWorkSessionStatus(deps.sql, config.tenantId, sessionId, "RUNNING", null);
     await appendWorkSessionStep(deps.sql, sessionId, "session_started", "ok", {
       tenantId: config.tenantId,
       sessionKey: config.sessionKey,
@@ -332,7 +332,7 @@ export async function startWorkSession(
     const pending = actions.filter((a) => a.status === "PENDING_APPROVAL").length;
     const status: WorkSessionStatus = pending > 0 ? "WAITING_APPROVAL" : "COMPLETED";
     const summary = summarize(sessionId, config.tenantId, config.sessionKey, status, decisions, actions);
-    await updateWorkSessionStatus(deps.sql, sessionId, status, summary);
+    await updateWorkSessionStatus(deps.sql, config.tenantId, sessionId, status, summary);
     await appendWorkSessionStep(deps.sql, sessionId, "session_completed", "ok", { status });
     log(`session ${config.sessionKey} -> ${status} (${decisions.length} prospects, ${actions.length} drafts)`);
     return { sessionId, status, summary, started: true };
@@ -340,7 +340,7 @@ export async function startWorkSession(
     const message = error instanceof Error ? error.message : String(error);
     const status: WorkSessionStatus = "FAILED";
     const summary = summarize(sessionId, config.tenantId, config.sessionKey, status, decisions, actions);
-    await updateWorkSessionStatus(deps.sql, sessionId, status, summary);
+    await updateWorkSessionStatus(deps.sql, config.tenantId, sessionId, status, summary);
     await appendWorkSessionStep(deps.sql, sessionId, "session_failed", "error", { error: message.slice(0, 300) });
     log(`session ${config.sessionKey} FAILED: ${message.slice(0, 300)}`);
     throw error;
@@ -365,15 +365,20 @@ export interface ApproveActionInput {
  * TASK 17: met een approval-store wordt de menselijke beslissing eerst als
  * first-class approval vastgelegd (PENDING → APPROVED); zonder store is het
  * gedrag identiek aan vóór de integratie (backwards compatible).
+ *
+ * Sprint 4 (tenant-safe): de sessie wordt per (tenantId, sessionId) opgehaald
+ * en bijgewerkt — een cross-tenant lookup/update is onmogelijk en geeft
+ * dezelfde WORK_SESSION_NOT_FOUND als een onbekende sessie.
  */
 export async function approveAction(
+  tenantId: string,
   sessionId: string,
   actionId: string,
   input: ApproveActionInput,
   deps: EmployeeDeps,
 ): Promise<{ actionStatus: string; blockedReason?: string; providerMessageId?: string }> {
   const log = deps.log ?? ((message: string) => console.info(`[employee] ${message}`));
-  const session = await getWorkSession(deps.sql, sessionId);
+  const session = await getWorkSession(deps.sql, tenantId, sessionId);
   if (!session) throw new Error("WORK_SESSION_NOT_FOUND");
   if (session.status !== "WAITING_APPROVAL") {
     throw new Error(`WORK_SESSION_NOT_APPROVABLE:${session.status}`);
@@ -432,7 +437,7 @@ export async function approveAction(
   const remaining = summary.actions.filter((a) => a.status === "PENDING_APPROVAL").length;
   const nextStatus: WorkSessionStatus = remaining > 0 ? "WAITING_APPROVAL" : "COMPLETED";
   summary.status = nextStatus;
-  await updateWorkSessionStatus(deps.sql, sessionId, nextStatus, summary);
+  await updateWorkSessionStatus(deps.sql, tenantId, sessionId, nextStatus, summary);
   await appendWorkSessionStep(deps.sql, sessionId, "approval", dispatch.status.toLowerCase(), {
     actionId,
     decision: "approve",
@@ -449,13 +454,14 @@ export async function approveAction(
 
 /** Human rejection: stops the action; no side effect occurs. */
 export async function rejectAction(
+  tenantId: string,
   sessionId: string,
   actionId: string,
   deps: EmployeeDeps,
   approver?: string,
 ): Promise<{ actionStatus: string }> {
   const log = deps.log ?? ((message: string) => console.info(`[employee] ${message}`));
-  const session = await getWorkSession(deps.sql, sessionId);
+  const session = await getWorkSession(deps.sql, tenantId, sessionId);
   if (!session) throw new Error("WORK_SESSION_NOT_FOUND");
   const summary = session.summary;
   if (!summary) throw new Error("WORK_SESSION_SUMMARY_MISSING");
@@ -490,7 +496,7 @@ export async function rejectAction(
   const remaining = summary.actions.filter((a) => a.status === "PENDING_APPROVAL").length;
   const nextStatus: WorkSessionStatus = remaining > 0 ? "WAITING_APPROVAL" : "COMPLETED";
   summary.status = nextStatus;
-  await updateWorkSessionStatus(deps.sql, sessionId, nextStatus, summary);
+  await updateWorkSessionStatus(deps.sql, tenantId, sessionId, nextStatus, summary);
   await appendWorkSessionStep(deps.sql, sessionId, "approval", "rejected", { actionId, decision: "reject" });
   log(`action ${actionId} REJECTED`);
   return { actionStatus: "REJECTED" };

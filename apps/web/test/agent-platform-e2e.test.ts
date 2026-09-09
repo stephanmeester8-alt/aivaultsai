@@ -147,13 +147,18 @@ function makeEmployeeSql() {
     }
     if (text.includes("FROM employee_work_sessions")) {
       const rows = [...sessions.values()];
-      if (text.includes("WHERE tenant_id =")) {
+      if (text.includes("AND session_key =")) {
         return rows.filter((s) => s.tenant_id === values[0] && s.session_key === values[1]);
+      }
+      if (text.includes("AND session_id =")) {
+        return rows.filter((s) => s.tenant_id === values[0] && s.session_id === values[1]);
       }
       return rows.filter((s) => s.session_id === values[0]);
     }
     if (text.includes("UPDATE employee_work_sessions")) {
-      const rec = [...sessions.values()].find((s) => s.session_id === values[3]);
+      const rec = [...sessions.values()].find(
+        (s) => s.tenant_id === values[3] && s.session_id === values[4],
+      );
       if (rec) {
         rec.status = values[0];
         if (values[1] != null) rec.summary = JSON.parse(String(values[1]));
@@ -258,7 +263,7 @@ test("e2e S1: full-run discovery → research → qualify → draft → approve 
   }
 
   // 2. Menselijke approval (approver ≠ agent) → dispatch → SENT.
-  const approved = await approveAction(run.sessionId, action.actionId, {
+  const approved = await approveAction(TENANT_A, run.sessionId, action.actionId, {
     email: "info@acme.nl",
     approver: "human@owner.nl",
   }, deps);
@@ -290,7 +295,7 @@ test("e2e S2: reject → REJECTED, géén provider-call, approval_rejected_total
   assert.equal(run.status, "WAITING_APPROVAL");
   const action = run.summary!.actions[0]!;
 
-  const rejected = await rejectAction(run.sessionId, action.actionId, deps, "human@owner.nl");
+  const rejected = await rejectAction(TENANT_A, run.sessionId, action.actionId, deps, "human@owner.nl");
   assert.equal(rejected.actionStatus, "REJECTED");
   assert.equal(provider.calls, 0); // geen side effect
 

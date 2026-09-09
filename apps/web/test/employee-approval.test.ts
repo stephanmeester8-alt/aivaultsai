@@ -160,15 +160,18 @@ function makeSessionSql() {
       return [row];
     }
     if (query.includes("FROM employee_work_sessions")) {
-      const [sessionId] = values as [string];
+      const [tenantId, sessionId] = values as [string, string];
       const row = sessions.get(sessionId);
-      return row ? [row] : [];
+      return row && row.tenant_id === tenantId ? [row] : [];
     }
     if (query.includes("UPDATE employee_work_sessions")) {
-      // Echte SQL: status, summary, status (CASE WHEN), session_id → 4 waarden.
-      const [status, summaryJson, , sessionId] = values as [string, string | null, string, string];
+      // Echte SQL: SET status(0), summary(1), CASE-status(2),
+      // WHERE tenant_id(3), session_id(4).
+      const [status, summaryJson] = values as [string, string | null];
+      const tenantId = String(values[3]);
+      const sessionId = String(values[4]);
       const row = sessions.get(sessionId);
-      if (row) {
+      if (row && row.tenant_id === tenantId) {
         row.status = status;
         row.summary = summaryJson ? JSON.parse(summaryJson) : null;
         row.updated_at = "2026-09-01T09:00:00.000Z";
@@ -225,8 +228,8 @@ async function makeWaitingSession(sql: EmployeeSql, sessionKey: string) {
     waitingApproval: 1,
     blocked: 0,
   };
-  await updateWorkSessionStatus(sql, started.sessionId, "WAITING_APPROVAL", summary);
-  return (await getWorkSession(sql, started.sessionId))!;
+  await updateWorkSessionStatus(sql, TENANT_ID, started.sessionId, "WAITING_APPROVAL", summary);
+  return (await getWorkSession(sql, TENANT_ID, started.sessionId))!;
 }
 
 test("orchestrator: approveAction legt approval vast (PENDING → APPROVED) en stuurt", async () => {
@@ -236,6 +239,7 @@ test("orchestrator: approveAction legt approval vast (PENDING → APPROVED) en s
   const session = await makeWaitingSession(sql, "day-approve");
 
   const result = await approveAction(
+    TENANT_ID,
     session.sessionId,
     "action_1",
     { email: "owner@acme.nl", approver: "human@owner.nl" },
@@ -257,7 +261,7 @@ test("orchestrator: approveAction zonder approver + store → APPROVER_REQUIRED 
   const session = await makeWaitingSession(sql, "day-noapprover");
 
   await assert.rejects(
-    approveAction(session.sessionId, "action_1", { email: "owner@acme.nl" }, { sql, provider, approvals }),
+    approveAction(TENANT_ID, session.sessionId, "action_1", { email: "owner@acme.nl" }, { sql, provider, approvals }),
     /APPROVER_REQUIRED/,
   );
   assert.equal(sent(), 0);
@@ -269,7 +273,7 @@ test("orchestrator: rejectAction legt REJECTED vast; geen provider-call", async 
   const { provider, sent } = makeProvider();
   const session = await makeWaitingSession(sql, "day-reject");
 
-  const result = await rejectAction(session.sessionId, "action_1", { sql, provider, approvals }, "human@owner.nl");
+  const result = await rejectAction(TENANT_ID, session.sessionId, "action_1", { sql, provider, approvals }, "human@owner.nl");
   assert.equal(result.actionStatus, "REJECTED");
   assert.equal(sent(), 0);
 
@@ -284,6 +288,7 @@ test("orchestrator: zonder store blijft het oude gedrag (backwards compatible)",
   const session = await makeWaitingSession(sql, "day-oldbehavior");
 
   const result = await approveAction(
+    TENANT_ID,
     session.sessionId,
     "action_1",
     { email: "owner@acme.nl" }, // géén approver, géén store → oude pad

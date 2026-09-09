@@ -54,10 +54,12 @@ export type RuntimeSql = (
  * A read followed by a write is not safe here: concurrent serverless
  * invocations can both observe an empty value and execute duplicate work.
  * The conditional update lets Postgres serialize the claim instead.
+ * Tenant-aware (Sprint 4): de claim is per (tenant, conversation).
  */
 export async function claimConversationRuntimeRun(
   sql: RuntimeSql,
   conversationId: string,
+  tenantId: string,
   runId: string,
 ): Promise<boolean> {
   const rows = await sql`
@@ -67,6 +69,7 @@ export async function claimConversationRuntimeRun(
         || ${({ runtime_run_id: runId })}::jsonb,
       last_activity_at = NOW()
     WHERE conversation_id = ${conversationId}::uuid
+      AND tenant_id = ${tenantId}::uuid
       AND metadata->>'runtime_run_id' IS NULL
     RETURNING conversation_id
   `;
@@ -124,11 +127,13 @@ function buildAdapterRegistry(core: typeof import("@aivaultsai/agent-core")) {
  * Recorder writes are fire-and-forget inside agent-core by design. In
  * serverless the function may be frozen right after the response, dropping
  * pending writes — so the adapter tracks them and flushes before returning.
+ * Tenant-correlatie (Sprint 4): de site-/request-tenant wordt op elke entry
+ * gezet (migratie 012: tenant_id op alle 002-runtime-tabellen).
  */
 const pendingRecorderWrites = new Set<Promise<void>>();
 
 /** Append-only audit sink; a failed write never breaks the run. */
-function createLazyRecorder(): RunRecorder {
+function createLazyRecorder(tenantId: string): RunRecorder {
   return {
     record(entry: RunRecordEntry) {
       try {
@@ -137,7 +142,7 @@ function createLazyRecorder(): RunRecorder {
             createDefaultPostgresRunRecorder,
           } = await import("../runtime/postgres-run-recorder");
           const recorder = await createDefaultPostgresRunRecorder();
-          return recorder.record(entry as never);
+          return recorder.record({ ...entry, tenantId } as never);
         })();
         pendingRecorderWrites.add(promise);
         promise.catch(() => {
@@ -179,7 +184,7 @@ async function buildRuntimeEngines() {
   return { core, agents, tasks, tools, adapters, approvals, evidence, handoffs };
 }
 
-async function buildRuntime(): Promise<AgentRuntime> {
+async function buildRuntime(tenantId: string): Promise<AgentRuntime> {
   const { core, agents, tasks, handoffs, evidence, approvals, tools, adapters } =
     await buildRuntimeEngines();
   return core.createAgentRuntime({
@@ -190,7 +195,7 @@ async function buildRuntime(): Promise<AgentRuntime> {
     approvals,
     tools,
     adapters,
-    recorder: createLazyRecorder(),
+    recorder: createLazyRecorder(tenantId),
   });
 }
 
@@ -208,10 +213,12 @@ export interface RuntimeTaskOutcome {
 /**
  * Run one safe agent-runtime task for a conversation that just produced a
  * lead. Idempotent: one run per conversation (persisted in
- * conversations.metadata). Never throws — the funnel stays non-fatal.
+ * conversations.metadata). Tenant-aware (Sprint 4): de claim en alle
+ * runtime-records zijn per tenant. Never throws — the funnel stays non-fatal.
  */
 export async function runConversationRuntimeTask(
   conversationId: string,
+  tenantId: string,
 ): Promise<RuntimeTaskOutcome> {
   if (!UUID_RE.test(conversationId)) {
     return { ran: false, skipped: "invalid_conversation_id" };
@@ -224,6 +231,7 @@ export async function runConversationRuntimeTask(
     const claimed = await claimConversationRuntimeRun(
       sql as unknown as RuntimeSql,
       conversationId,
+      tenantId,
       runId,
     );
     if (!claimed) {
@@ -231,6 +239,7 @@ export async function runConversationRuntimeTask(
         SELECT metadata->>'runtime_run_id' AS run_id
         FROM conversations
         WHERE conversation_id = ${conversationId}::uuid
+          AND tenant_id = ${tenantId}::uuid
         LIMIT 1
       `;
       return {
@@ -259,7 +268,7 @@ export async function runConversationRuntimeTask(
       },
     };
 
-    const runtime = await buildRuntime();
+    const runtime = await buildRuntime(tenantId);
     const submitted = runtime.submit(request);
     const run =
       submitted.state === "READY_FOR_EXECUTION"
@@ -313,6 +322,8 @@ export interface AssistantToolExecution {
 export interface AssistantToolDeps {
   /** Pre-built engines + gate (tests); defaults to the production core. */
   core?: AssistantToolCore;
+  /** Verplicht: tenant-correlatie voor runtime-records (NO TENANT = NO EXECUTION). */
+  tenantId: string;
   /** DNS resolver for the pre-flight SSRF check (tests). */
   lookup?: (host: string) => Promise<readonly string[]>;
   log?: (message: string) => void;
@@ -331,14 +342,14 @@ export interface AssistantToolCore {
 }
 
 /** Production core: the same engine instances the Agent Runtime uses. */
-export async function buildAssistantToolCore(): Promise<AssistantToolCore> {
+export async function buildAssistantToolCore(tenantId: string): Promise<AssistantToolCore> {
   const { core, agents, tasks, tools, adapters, approvals, evidence } =
     await buildRuntimeEngines();
   return {
     tasks,
     gate: core.createExecutionGate({ agents, tasks, tools, approvals, adapters }),
     evidence,
-    recorder: createLazyRecorder(),
+    recorder: createLazyRecorder(tenantId),
   };
 }
 
@@ -361,7 +372,7 @@ const ASSISTANT_RESEARCH_MIN_TEXT = 800;
  */
 export async function executeAssistantToolCall(
   call: AssistantToolCall,
-  deps: AssistantToolDeps = {},
+  deps: AssistantToolDeps,
 ): Promise<AssistantToolExecution> {
   const log = deps.log ?? ((message: string) => console.info(`[assistant-tool] ${message}`));
 
@@ -398,7 +409,7 @@ export async function executeAssistantToolCall(
     return { ok: false, output: null, error: dnsPolicy.reason, executionStatus: "REJECTED", evidenceIds: [] };
   }
 
-  const core = deps.core ?? (await buildAssistantToolCore());
+  const core = deps.core ?? (await buildAssistantToolCore(deps.tenantId));
   const taskId = `assistant_task_${randomUUID()}`;
   const startedAt = Date.now();
 
