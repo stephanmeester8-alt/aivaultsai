@@ -42,6 +42,25 @@ export function isRiskClass(value: unknown): value is RiskClass {
   return typeof value === "string" && (RISK_CLASSES as readonly string[]).includes(value);
 }
 
+/**
+ * RiskClass → RiskLevel (voor recorder/audit-labels).
+ * R0/R1 lezen/analyseren = LOW · R2 interne opslag/drafts = MEDIUM ·
+ * R3 business write = HIGH · R4 extern/sensitief = CRITICAL.
+ */
+export function riskLevelForRiskClass(riskClass: RiskClass): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" {
+  switch (riskClass) {
+    case "R0":
+    case "R1":
+      return "LOW";
+    case "R2":
+      return "MEDIUM";
+    case "R3":
+      return "HIGH";
+    case "R4":
+      return "CRITICAL";
+  }
+}
+
 /** Invariant: R4 vereist altijd approval — geen uitzonderingen. */
 export function approvalRequiredForRiskClass(riskClass: RiskClass): boolean {
   return riskClass === "R4";
