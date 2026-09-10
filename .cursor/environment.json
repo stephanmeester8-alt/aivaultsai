@@ -1,0 +1,17 @@
+{
+  "name": "AIVaultsAI",
+  "install": "bash .cursor/install.sh",
+  "ports": [
+    {
+      "name": "web",
+      "port": 3000
+    }
+  ],
+  "terminals": [
+    {
+      "name": "web-dev",
+      "command": "cd apps/web && npm run dev",
+      "description": "Next.js dev server for the AIVaultsAI website (apps/web) on http://localhost:3000. The marketing homepage runs without secrets; the AI assistant (/api/assistant) needs OPENAI_API_KEY and the database-backed routes need DATABASE_URL."
+    }
+  ]
+}
