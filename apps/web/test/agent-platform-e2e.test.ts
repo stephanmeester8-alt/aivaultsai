@@ -171,6 +171,8 @@ function makeEmployeeSql() {
     if (text.includes("SELECT\n      company_id, name, domain")) return [];
     if (text.includes("INSERT INTO prospect_runs")) return [{ run_id: "run-1" }];
     if (text.includes("UPDATE prospect_runs")) return [{ run_id: "claimed" }];
+    if (text.includes("INSERT INTO lead_signals")) return [{ signal_id: "signal-1" }];
+    if (text.includes("INSERT INTO lead_opportunities")) return [{ opportunity_id: "opportunity-1" }];
     if (text.includes("INSERT INTO audit_manifests")) return [];
     return [];
   };

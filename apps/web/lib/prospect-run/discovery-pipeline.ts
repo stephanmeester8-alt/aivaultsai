@@ -41,6 +41,12 @@ import {
   type WebsiteResearchDeps,
 } from "./website-research.ts";
 import type { ProspectIntelligence, ProspectInput } from "./types.ts";
+import {
+  analyzeLeadIntelligence,
+  toLeadIntelligenceExport,
+  type LeadIntelligenceExport,
+} from "./lead-intelligence.ts";
+import { persistLeadIntelligence } from "./lead-intelligence-repository.ts";
 
 export interface DiscoveryRunOptions {
   companies: readonly DiscoveredCompany[];
@@ -67,6 +73,7 @@ export interface CompanyOutcome {
   research: { status: CrawlStatus; httpStatus: number | null; errors: string[] };
   aiDetection: AiDetectionResult | null;
   prospect: { runId?: string; state?: string } | null;
+  leadIntelligence?: LeadIntelligenceExport;
   error?: string;
 }
 
@@ -218,6 +225,13 @@ export async function runDiscoveryPipeline(
         analyze,
         persistManifest: (manifest) => persistRunManifest(deps.sql, manifest),
       });
+      const leadIntelligence = analyzeLeadIntelligence(research, company.industry);
+      await persistLeadIntelligence(deps.sql, {
+        tenantId: options.tenantId,
+        companyId,
+        prospectRunId: runId,
+        result: leadIntelligence,
+      });
       log(`prospect created/updated: ${domain} -> run ${runId} (${result.state})`);
 
       outcomes.push({
@@ -232,6 +246,13 @@ export async function runDiscoveryPipeline(
         },
         aiDetection: detection,
         prospect: { runId, state: result.state },
+        leadIntelligence: toLeadIntelligenceExport({
+          company: company.name,
+          domain,
+          location: company.location,
+          industry: company.industry,
+          result: leadIntelligence,
+        }),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
